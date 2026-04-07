@@ -15,6 +15,8 @@ import ResetPassword from "./page/ResetPassword";
 import Login from "./page/Login";
 import Register from "./page/Register";
 import "./App.css";
+import VerifyOTP from "./page/VerifyOTP";
+import VerifyOTPForgot from "./page/VerifyOTPForgot";
 
 /**
  * 1. ProtectedRoute Component
@@ -66,7 +68,8 @@ function MainLayout() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
-          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/verify-otp" element={<VerifyOTP />} />
+          <Route path="/verify-otp-forgot" element={<VerifyOTPForgot />} />
 
           {/* --- ආරක්ෂිත (Protected) පිටු --- */}
           <Route
