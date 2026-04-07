@@ -1,0 +1,150 @@
+.auth-container1 {
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(
+    135deg,
+    #1e3c72 0%,
+    #2a5298 100%
+  ); /* Deep blue gradient */
+  font-family: "Poppins", sans-serif;
+}
+
+.auth-card1 {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(15px);
+  padding: 40px;
+  border-radius: 20px;
+  width: 400px;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+.auth-title1 {
+  text-align: center;
+  margin-bottom: 5px;
+  font-size: 28px;
+}
+
+.auth-subtitle1 {
+  text-align: center;
+  font-size: 14px;
+  margin-bottom: 30px;
+  opacity: 0.8;
+}
+
+.input-group1 {
+  margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+.input-group1 label {
+  font-size: 13px;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.input-group1 input {
+  padding: 12px;
+  border-radius: 10px;
+  border: none;
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  outline: none;
+}
+.auth-select1 {
+  padding: 12px;
+  border-radius: 10px;
+  border: none;
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  outline: none;
+}
+
+.auth-select1 option {
+  background: #1e3c72;
+  color: white;
+}
+
+.auth-btn1 {
+  width: 100%;
+  padding: 14px;
+  border-radius: 10px;
+  border: none;
+  background: #00d2ff; /* Bright blue highlight */
+  color: #1e3c72;
+  font-weight: bold;
+  cursor: pointer;
+  transition: 0.3s;
+}
+
+.auth-btn1:hover {
+  background: #ffffff;
+  transform: translateY(-2px);
+}
+
+.auth-footer1 {
+  text-align: center;
+  margin-top: 20px;
+  font-size: 13px;
+}
+
+.auth-footer1 span {
+  color: #00d2ff;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.input-group1 input::placeholder {
+  color: white;
+  opacity: 0.7;
+}
+
+.input-group1 input:-ms-input-placeholder {
+  color: white;
+}
+
+.input-group1 input::-ms-input-placeholder {
+  color: white;
+}
+.otp-box:focus {
+  border-color: #1a73e8 !important;
+  box-shadow: 0 0 5px rgba(26, 115, 232, 0.3);
+  outline: none;
+}
+/* Remember Me සහ Forgot Password පෙළගැස්ම */
+.auth-options1 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 25px;
+  font-size: 13px;
+}
+
+.remember-me1 {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  gap: 8px;
+}
+
+.remember-me1 input {
+  cursor: pointer;
+  accent-color: #00d2ff; /* Checkbox එකේ පාට වෙනස් කිරීම */
+}
+
+.forgot-password1 {
+  color: #00d2ff;
+  cursor: pointer;
+  font-weight: 500;
+  transition: 0.3s;
+  text-decoration: none;
+}
+
+.forgot-password1:hover {
+  text-decoration: none;
+  opacity: 0.8;
+}

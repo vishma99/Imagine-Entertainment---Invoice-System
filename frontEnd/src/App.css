@@ -1,0 +1,35 @@
+/* මුළු Layout එකම පාලනය කරන container එක */
+.app-layout {
+  display: flex;
+  min-height: 100vh;
+  width: 100%;
+}
+
+/* Sidebar එක ඇති විට පෙන්වන style එක */
+.main-content {
+  flex: 1; /* Sidebar එකට පසු ඉතිරි මුළු ඉඩම ලබා ගනී */
+  padding: 20px;
+  background-color: #f4f7fe;
+  /* මෙහි margin-left: 250px වැනි දේවල් තිබේ නම් ඒවා ඉවත් කරන්න */
+}
+
+/* Sidebar එක නැති විට (Login/Register සඳහා) */
+.full-content {
+  width: 100%; /* මුළු පිටුවේම පළල ලබා ගනී */
+  min-height: 100vh;
+  display: flex;
+  justify-content: center; /* Form එක තිරස් අතට මැදට ගනී */
+  align-items: center; /* Form එක සිරස් අතට මැදට ගනී */
+ background: linear-gradient(
+    135deg,
+    #1e3c72 0%,
+    #2a5298 100%
+  );/* Register පිටුවේ තද නිල් පැහැය මුළු පසුබිමටම ලබා දීමට */
+}
+
+/* Register පිටුවේ ඇති card එක සම්පූර්ණයෙන්ම වමට තල්ලු වී ඇත්නම් */
+.register-container {
+  width: 100%;
+  max-width: 400px; /* Form එකේ උපරිම පළල */
+  margin: 0 auto; /* මැදට තබා ගැනීමට */
+}
