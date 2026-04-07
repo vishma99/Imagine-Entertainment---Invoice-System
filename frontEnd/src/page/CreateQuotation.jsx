@@ -73,7 +73,7 @@ const InvoiceForm = () => {
   useEffect(() => {
     const fetchItems = async () => {
       try {
-        const res = await axios.get("http://localhost:5000/api/items");
+        const res = await axios.get("https://imagine-entertainment-invoice-system.onrender.com/api/items");
 
         setPriceList(res.data);
       } catch (err) {
@@ -531,7 +531,7 @@ const InvoiceForm = () => {
     // --- 6. Axios හරහා API එකට යැවීම ---
     try {
       const response = await axios.post(
-        "http://localhost:5000/api/quotations",
+        "https://imagine-entertainment-invoice-system.onrender.com/api/quotations",
         finalData,
       );
       if (response.status === 201) {

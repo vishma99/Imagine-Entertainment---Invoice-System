@@ -11,7 +11,7 @@ const ForgotPassword = () => {
 
     try {
       const response = await fetch(
-        "http://localhost:5000/api/user/forgot-password",
+        "https://imagine-entertainment-invoice-system.onrender.com/api/user/forgot-password",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

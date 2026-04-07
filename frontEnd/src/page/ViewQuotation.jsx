@@ -34,7 +34,7 @@ export default function ViewQuotation() {
 
   const fetchQuotations = async () => {
     try {
-      const res = await axios.get("http://localhost:5000/api/quotations");
+      const res = await axios.get("https://imagine-entertainment-invoice-system.onrender.com/api/quotations");
       if (Array.isArray(res.data)) {
         setQuotations(res.data);
       } else if (res.data.quotations) {
@@ -58,7 +58,7 @@ export default function ViewQuotation() {
   const handleUpdate = async () => {
     try {
       await axios.put(
-        `http://localhost:5000/api/quotations/${selectedQuote._id}`,
+        `https://imagine-entertainment-invoice-system.onrender.com/api/quotations/${selectedQuote._id}`,
         selectedQuote,
       );
       alert("✅ Updated Successfully!");
@@ -2749,7 +2749,7 @@ export default function ViewQuotation() {
                         try {
                           // 2. Database එකට Save කිරීම
                           const response = await axios.put(
-                            `http://localhost:5000/api/quotations/${q._id}`,
+                            `https://imagine-entertainment-invoice-system.onrender.com/api/quotations/${q._id}`,
                             {
                               ...q,
                               quotationNo: typedInvoiceNo,

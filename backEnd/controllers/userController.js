@@ -71,7 +71,7 @@ export const verifyOTP = async (req, res) => {
     const admins = await User.find({ role: "Admin", isAdminApproved: true });
 
     if (admins.length > 0) {
-      const approveLink = `http://localhost:5000/api/user/approve/${approveToken}`;
+      const approveLink = `https://imagine-entertainment-invoice-system.onrender.com/api/user/approve/${approveToken}`;
       const adminHtml = `
     <div style="font-family: Arial, sans-serif; border: 1px solid #ddd; padding: 20px; border-radius: 10px;">
       <h2 style="color: #e67e22;">New User Approval Required</h2>
