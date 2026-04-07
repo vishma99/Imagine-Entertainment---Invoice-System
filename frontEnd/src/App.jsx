@@ -16,21 +16,28 @@ import Login from "./page/Login";
 import Register from "./page/Register";
 import "./App.css";
 
-// 1. ProtectedRoute Component එක
-// මෙය මගින් token එක නැතිනම් පරිශීලකයා ලොගින් පිටුවට හරවා යවයි
+/**
+ * 1. ProtectedRoute Component
+ * ලොග් වී නොමැති නම් (Token එකක් නැතිනම්) පරිශීලකයා ලොගින් පිටුවට හරවා යවයි.
+ */
 const ProtectedRoute = ({ children }) => {
   const token = localStorage.getItem("token");
 
   if (!token) {
+    // replace={true} මගින් Back button එක එබූ විට නැවත ආරක්ෂිත පිටුවට යාම වළක්වයි
     return <Navigate to="/login" replace />;
   }
 
   return children;
 };
 
-// 2. ප්‍රධාන Layout එක පාලනය කරන Component එක
+/**
+ * 2. MainLayout Component
+ * Sidebar එක සහ Routes පාලනය කරයි.
+ */
 function MainLayout() {
   const location = useLocation();
+  const token = localStorage.getItem("token"); // වත්මන් Token එක ලබා ගැනීම
 
   // Sidebar එක පෙන්වීමට අවශ්‍ය නැති පිටු ලැයිස්තුව
   const hideSidebarPaths = [
@@ -40,22 +47,28 @@ function MainLayout() {
     "/reset-password",
   ];
 
-  const shouldShowSidebar = !hideSidebarPaths.includes(location.pathname);
+  /**
+   * කොන්දේසිය:
+   * 1. වත්මන් path එක hide list එකේ නොතිබිය යුතුය.
+   * 2. පරිශීලකයා සතුව වලංගු Token එකක් තිබිය යුතුය.
+   */
+  const shouldShowSidebar =
+    !hideSidebarPaths.includes(location.pathname) && token;
 
   return (
     <div className="app-layout">
-      {/* Sidebar එක පෙන්වන්නේ ලොගින් වී ඇති විට සහ අදාළ පිටුවලදී පමණි */}
+      {/* ලොග් වී ඇති විට පමණක් Sidebar එක පෙන්වයි */}
       {shouldShowSidebar && <Sidebar />}
 
       <div className={shouldShowSidebar ? "main-content" : "full-content"}>
         <Routes>
-          {/* --- පොදු (Public) පිටු: ඕනෑම කෙනෙකුට පිවිසිය හැක --- */}
+          {/* --- පොදු (Public) පිටු --- */}
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
 
-          {/* --- ආරක්ෂිත (Protected) පිටු: ලොග් වූ අයට පමණි --- */}
+          {/* --- ආරක්ෂිත (Protected) පිටු --- */}
           <Route
             path="/"
             element={
@@ -89,15 +102,17 @@ function MainLayout() {
             }
           />
 
-          {/* වැරදි URL එකක් ගැසූ විට Home එකට හෝ Login එකට යැවීමට (Optional) */}
-          <Route path="*" element={<Navigate to="/" replace />} />
+          {/* වැරදි URL එකක් ඇතුළත් කළහොත් ලොගින් පිටුවට හරවා යැවීම */}
+          <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </div>
     </div>
   );
 }
 
-// 3. මූලික App Component එක
+/**
+ * 3. ප්‍රධාන App Component
+ */
 export default function App() {
   return (
     <BrowserRouter>
