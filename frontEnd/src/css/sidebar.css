@@ -1,0 +1,60 @@
+/* Sidebar ප්‍රධාන සැකසුම */
+.sidebar {
+  width: 260px;
+  background: linear-gradient(180deg, #1a2a6c 0%, #1a237e 100%);
+  color: white;
+  height: 100vh;
+  position: fixed; /* පිටුව scroll කරද්දී sidebar එක ස්ථාවරව තැබීමට */
+  left: 0;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 4px 0 10px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+}
+
+/* Logo එකේ Style එක */
+.sidebar .logo {
+  padding: 30px 20px;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  text-align: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+/* Navigation Links */
+.sidebar nav {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 0 15px;
+}
+
+.sidebar nav a {
+  display: flex;
+  align-items: center;
+  color: rgba(255, 255, 255, 0.7);
+  padding: 12px 15px;
+  text-decoration: none;
+  font-size: 15px;
+  font-weight: 500;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+/* Mouse එක ගෙනියන විට (Hover) */
+.sidebar nav a:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  transform: translateX(5px);
+}
+
+/* දැනට ඉන්න පිටුව (Active Link) පෙන්වීමට */
+.sidebar nav a.active {
+  background: #3b82f6;
+  color: white;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+}

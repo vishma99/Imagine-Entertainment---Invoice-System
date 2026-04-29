@@ -1,0 +1,26 @@
+/* වගුව වටා ඇති කොටස සීමා කිරීම */
+.table-scroll-container {
+  max-height: 400px; /* පේළි 6කට ආසන්න උසක් */
+  overflow-y: auto;  /* සිරස් අතට scroll bar එක පෙන්වයි */
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  position: relative;
+}
+
+/* වගුවේ header එක උඩම lock කර තබා ගැනීම (Sticky Header) */
+.db-table thead th {
+  position: sticky;
+  top: 0;
+  background-color: #f8fafc; /* Header එකට පසුබිම් වර්ණයක් දිය යුතුයි */
+  z-index: 10;
+  box-shadow: 0 2px 2px -1px rgba(0,0,0,0.1); /* Header එක යටින් පෙනෙන ලස්සන shadow එකක් */
+}
+
+/* Scrollbar එක පිළිවෙලට පෙන්වීමට (Chrome, Safari සඳහා) */
+.table-scroll-container::-webkit-scrollbar {
+  width: 6px;
+}
+.table-scroll-container::-webkit-scrollbar-thumb {
+  background-color: #cbd5e0;
+  border-radius: 10px;
+}

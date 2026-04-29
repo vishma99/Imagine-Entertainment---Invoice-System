@@ -3,7 +3,74 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 
 import "../css/createQuatation.css";
+import ShowSuccessModalDiscount from "../components/ShowSuccessModalDiscount";
+import ShowSuccessModal from "../components/ShowSuccessModal";
 
+const numberToWords = (num) => {
+  const a = [
+    "",
+    "One ",
+    "Two ",
+    "Three ",
+    "Four ",
+    "Five ",
+    "Six ",
+    "Seven ",
+    "Eight ",
+    "Nine ",
+    "Ten ",
+    "Eleven ",
+    "Twelve ",
+    "Thirteen ",
+    "Fourteen ",
+    "Fifteen ",
+    "Sixteen ",
+    "Seventeen ",
+    "Eighteen ",
+    "Nineteen ",
+  ];
+  const b = [
+    "",
+    "",
+    "Twenty",
+    "Thirty",
+    "Forty",
+    "Fifty",
+    "Sixty",
+    "Seventy",
+    "Eighty",
+    "Ninety",
+  ];
+
+  if ((num = num.toString()).length > 9) return "Amount too large";
+  let n = ("000000000" + num)
+    .substr(-9)
+    .match(/^(\d{2})(\d{2})(\d{2})(\d{1})(\d{2})$/);
+  if (!n) return "";
+  let str = "";
+  str +=
+    n[1] != 0
+      ? (a[Number(n[1])] || b[n[1][0]] + " " + a[n[1][1]]) + "Crore "
+      : "";
+  str +=
+    n[2] != 0
+      ? (a[Number(n[2])] || b[n[2][0]] + " " + a[n[2][1]]) + "Lakh "
+      : "";
+  str +=
+    n[3] != 0
+      ? (a[Number(n[3])] || b[n[3][0]] + " " + a[n[3][1]]) + "Thousand "
+      : "";
+  str +=
+    n[4] != 0
+      ? (a[Number(n[4])] || b[n[4][0]] + " " + a[n[4][1]]) + "Hundred "
+      : "";
+  str +=
+    n[5] != 0
+      ? (str != "" ? "and " : "") +
+        (a[Number(n[5])] || b[n[5][0]] + " " + a[n[5][1]])
+      : "";
+  return str.trim() + " Rupees Only";
+};
 const InvoiceForm = () => {
   const [invoice, setInvoice] = useState({
     invoiceNo: "T-",
@@ -30,6 +97,8 @@ const InvoiceForm = () => {
     discount: 0,
     discountPercent: 0,
     technicianDistance: "",
+    discountLED: 0,
+    discountLEDPercent: 0,
 
     ledSystems: [],
 
@@ -91,11 +160,21 @@ const InvoiceForm = () => {
   const [summaryDayValues, setSummaryDayValues] = useState({});
   const [isRehearsal, setIsRehearsal] = useState("No");
 
-  const [quotationType, setQuotationType] = useState("Normal");
+  const [quotationType, setQuotationType] = useState("Normal Quotation");
   const [showTypeSelection, setShowTypeSelection] = useState(false);
 
   const [showEditConfirmation, setShowEditConfirmation] = useState(false);
+  const [finalView, setFinalView] = useState(null);
+  const [finalViewYes, setFinalViewYes] = useState(null);
+  const [discountSelection, setDiscountSelection] = useState("");
+  const isMultiDay =
+    invoice.rehearsalDay ||
+    invoice.eventDate.filter((d) => d !== "").length > 1;
 
+  const [rehearsalDiscountPercent, setRehearsalDiscountPercent] = useState(50); // Default 50%
+  const [rehearsalAmount, setRehearsalAmount] = useState(0);
+  const [eventDayCustomValues, setEventDayCustomValues] = useState({});
+  // const [rehearsalAmount, setRehearsalAmount] = useState(subTotalLEDGroup * 0.5);
   const handleShowSummary = () => {
     const ledT =
       calculateCategoryTotal(invoice.ledSystems) +
@@ -140,6 +219,7 @@ const InvoiceForm = () => {
     setSummaryDayValues(initialValues);
     setShowSummary(true);
   };
+
   const handleSummaryPriceChange = (
     tableId,
     dayIndex,
@@ -176,8 +256,16 @@ const InvoiceForm = () => {
       subTitle: "New Sub-category",
       calculationMethod: "unit", // මුළු Block එකටම අදාළ default method එක
       lineItems: [{ desc: "", width: 0, height: 0, qty: 1, unitPrice: 0 }],
+      isNew: true,
     };
-    setInvoice({ ...invoice, [mainCatKey]: [...invoice[mainCatKey], newSub] });
+    const updatedMain = [...invoice[mainCatKey], newSub];
+    setInvoice({ ...invoice, [mainCatKey]: updatedMain });
+
+    const newIdx = updatedMain.length - 1;
+    setTimeout(() => {
+      const el = document.getElementById(`${mainCatKey}-${newIdx}`);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 100);
   };
   // --- අලුතින් එක් කළ යුතු කොටස ---
   const deleteSubCategory = (mainCatKey, subIdx) => {
@@ -368,21 +456,18 @@ const InvoiceForm = () => {
 
   const handleSaveQuotation = async () => {
     // 1. Event දින ගණන ගණනය කිරීම
-    setShowSaveModal(true);
+    setShowSaveModal(false);
+    saveToDatabase();
   };
 
   // Database එකට Save කිරීමේ පොදු function එක (කේතය පිරිසිදුව තබා ගැනීමට)
   const saveToDatabase = async (noteValue = "") => {
-    let finalSubTotal = 0;
-    let finalDiscount = 0; // Overall Discount (Main)
-    let finalDiscountPercent = 0;
-    let finalVat = 0;
-    let finalGrandTotal = 0;
-    let summaryDetails = [];
-    const isNormalQuotation =
-      !showSummary && !isMoreThanDays && (Number(specialNote) || 0) <= 0;
+    // const isNormalQuotation =
+    //   !showSummary && !isMoreThanDays && (Number(specialNote) || 0) <= 0;
+    const eventDaysCount = invoice.eventDate.filter((d) => d !== "").length;
+    const hasRehearsal = invoice.rehearsalDay && invoice.rehearsalDay !== "";
 
-    // --- 1. පද්ධති වල මුලික එකතුවන් (Base Totals) ගණනය කිරීම ---
+    const ismultiDaysQuotation = eventDaysCount > 1 || hasRehearsal;
     const ledT = calculateCategoryTotal(invoice.ledSystems);
     const lightT = calculateCategoryTotal(invoice.lightSystems);
     const soundT = calculateCategoryTotal(invoice.soundSystems);
@@ -393,139 +478,135 @@ const InvoiceForm = () => {
     const techT = calculateCategoryTotal(invoice.technicianSystems);
     const otherT = calculateCategoryTotal(invoice.otherSystems);
 
-    // LED කාණ්ඩයේ පද්ධති 4 හි මුළු එකතුව (Discount කිරීමට පෙර)
+    // LED කාණ්ඩයේ සම්පූර්ණ එකතුව (Discount කිරීමට පෙර)
     const totalLEDGroupBeforeDiscount = ledT + lightT + soundT + stageT;
 
-    // LED කාණ්ඩයට ලබා දී ඇති Special Discount අගයන් State එකෙන් ලබා ගැනීම
+    // --- වැදගත්: LED කාණ්ඩයේ Discount එක ලබා ගැනීම ---
     const ledGroupDiscountAmount =
-      Number(invoice.discountTotalLEDLightingSoundStageTruss) || 0;
+      Number(invoice.discountLED) ||
+      Number(invoice.discountTotalLEDLightingSoundStageTruss) ||
+      0;
     const ledGroupDiscountPercent =
-      Number(invoice.discountTotalLEDLightingSoundStageTrussPercent) || 0;
+      Number(invoice.discountLEDPercent) ||
+      Number(invoice.discountTotalLEDLightingSoundStageTrussPercent) ||
+      0;
 
-    // LED කාණ්ඩයේ ශුද්ධ එකතුව (Net Amount for LED Group)
+    // LED කාණ්ඩයේ ශුද්ධ එකතුව
     const netLEDGroup = totalLEDGroupBeforeDiscount - ledGroupDiscountAmount;
 
+    // අනෙකුත් සියලු කාණ්ඩවල එකතුව
     const otherCategoriesTotal = powerT + videoT + techT + otherT;
 
-    const subTotal = netLEDGroup + otherCategoriesTotal;
+    // 2. මුළු Sub Total එක ගණනය කිරීම
+    let finalSubTotal = 0;
+    let summaryDetails = [];
 
-    // අනෙකුත් පද්ධති වල එකතුව
-
-    // --- 2. "More than days" (Summary Table) Logic ---
     if (showSummary || isMoreThanDays || Number(specialNote) > 0) {
+      // --- Multi-day Logic (මෙය ඔබේ පවතින logic එකම වේ) ---
       let summarySubTotal = 0;
       const categories = [
-        {
-          id: "led",
-          title: "LED, Lighting, Sound, Stage & Truss Systems",
-          // මෙහි base අගය ලෙස Discount කළ පසු අගය (netLEDGroup) භාවිතා කරයි
-          base: netLEDGroup,
-        },
-        { id: "power", title: "Power Generator System", base: powerT },
-        { id: "video", title: "Video Animation Services", base: videoT },
-        { id: "tech", title: "Technician & Transport Charges", base: techT },
-        { id: "other", title: "Other Services", base: otherT },
+        { id: "led", base: netLEDGroup },
+        { id: "power", base: powerT },
+        { id: "video", base: videoT },
+        { id: "tech", base: techT },
+        { id: "other", base: otherT },
       ];
 
       summaryDetails = categories.map((cat) => {
-        let row = [];
         let categoryFinalTotal = 0;
-
-        // Rehearsal සඳහා ගණනය කිරීම
+        let row = [];
         if (isRehearsal === "Yes") {
           const amt =
             parseFloat(summaryDayValues[`${cat.id}_rehearsal_amount`]) || 0;
-          row.push({
-            rowType: "Rehearsal",
-            discountRs:
-              parseFloat(summaryDayValues[`${cat.id}_rehearsal_discount_rs`]) ||
-              0,
-            discountPercent:
-              parseFloat(
-                summaryDayValues[`${cat.id}_rehearsal_discount_percent`],
-              ) || 0,
-            amount: amt,
-          });
+          row.push({ rowType: "Rehearsal", amount: amt });
           categoryFinalTotal += amt;
         }
-
-        // එක් එක් දවස් සඳහා ගණනය කිරීම
         for (let i = 0; i < (Number(specialNote) || 0); i++) {
           const amt =
             parseFloat(summaryDayValues[`${cat.id}_${i}_amount`]) || 0;
-          row.push({
-            rowType: `Day ${i + 1}`,
-            discountRs:
-              parseFloat(summaryDayValues[`${cat.id}_${i}_discount_rs`]) || 0,
-            discountPercent:
-              parseFloat(summaryDayValues[`${cat.id}_${i}_discount_percent`]) ||
-              0,
-            amount: amt,
-          });
+          row.push({ rowType: `Day ${i + 1}`, amount: amt });
           categoryFinalTotal += amt;
         }
-
         summarySubTotal += categoryFinalTotal;
         return {
           categoryId: cat.id,
-          categoryTitle: cat.title,
-          baseTotal: cat.base,
           row: row,
           categoryFinalTotal: categoryFinalTotal,
         };
       });
-
       finalSubTotal = summarySubTotal;
-      finalDiscountPercent = Number(invoice.discountPercent) || 0;
-      // Overall Discount එක ප්‍රතිශතයක් ලෙස ඇත්නම් එය ගණනය කිරීම
-      finalDiscount = (finalSubTotal * finalDiscountPercent) / 100;
     }
 
     // --- 3. "Normal Quotation" Logic ---
     else {
       // LED Group එකේ Discount අඩු කළ අගය + අනෙක් ඒවයේ එකතුව
-      finalSubTotal = netLEDGroup + powerT + videoT + techT + otherT;
-      finalDiscountPercent = Number(invoice.discountPercent) || 0;
-      finalDiscount = Number(invoice.discount) || 0;
+      finalSubTotal = netLEDGroup + otherCategoriesTotal;
     }
 
     // --- 4. අවසාන ගණනය කිරීම් (Tax & Grand Total) ---
-    const totalValueOfSupply = finalSubTotal - finalDiscount;
-    finalVat = totalValueOfSupply * 0.18;
-    finalGrandTotal = totalValueOfSupply + finalVat;
+    const finalOverallDiscount = Number(invoice.discount) || 0;
+    const finalOverallDiscountPercent = Number(invoice.discountPercent) || 0;
+
+    // 4. අවසාන ගෙවිය යුතු මුදල සහ VAT
+    const totalValueOfSupply = finalSubTotal - finalOverallDiscount;
+    const finalVat = totalValueOfSupply * 0.18;
+    const finalGrandTotal = totalValueOfSupply + finalVat;
+
+    const formattedEventDates = invoice.eventDate
+      .map((date, idx) => {
+        if (!date) return null;
+        return {
+          date: date,
+          // ඔයා UI එකේ වෙනස් කරන අගය ගන්නවා, නැත්නම් default 100% / full amount ගන්නවා
+          percentage: Number(eventDayCustomValues[`day_${idx}_pct`] ?? 100),
+          amount: Number(
+            eventDayCustomValues[`day_${idx}_amt`] ?? subTotalLEDGroup,
+          ),
+        };
+      })
+      .filter((item) => item !== null);
 
     // --- 5. Database එකට යවන දත්ත සැකසීම ---
     const finalData = {
       ...invoice,
+      eventDate: formattedEventDates,
       summaryDetails,
 
       // පද්ධති වල මුළු අගයන් (Totals for Database)
-      totalLEDLightingSoundStageTruss: totalLEDGroupBeforeDiscount, // Original Total
-      discountTotalLEDLightingSoundStageTruss: ledGroupDiscountAmount, // Discount Rs.
-      discountTotalLEDLightingSoundStageTrussPercent: ledGroupDiscountPercent, // Discount %
+      // 🟢 LED Group එකට අදාළ වට්ටම මෙතනට සේව් වේ
+      discountTotalLEDLightingSoundStageTruss: Number(
+        ledGroupDiscountAmount.toFixed(2),
+      ),
+      discountTotalLEDLightingSoundStageTrussPercent: Number(
+        ledGroupDiscountPercent,
+      ),
+      totalLEDLightingSoundStageTruss: totalLEDGroupBeforeDiscount,
 
-      totalPowerGenerator: powerT,
-      totalVideoAnimation: videoT,
-      totalTechnicianTransport: techT,
-      totalOtherServices: otherT,
+      // 🟢 මුළු Quotation එකටම අදාළ වට්ටම (Overall Discount) මෙතනට සේව් වේ
+      discount: Number(finalOverallDiscount.toFixed(2)),
+      discountPercent: Number(finalOverallDiscountPercent),
 
-      // ප්‍රධාන එකතුවන්
+      // අනෙකුත් ප්‍රධාන අගයන්
       subTotal: Number(finalSubTotal.toFixed(2)),
-      discount: Number(finalDiscount.toFixed(2)),
-      discountPercent: Number(finalDiscountPercent),
       totalValueOfSupply: Number(totalValueOfSupply.toFixed(2)),
       vat: Number(finalVat.toFixed(2)),
       grandTotal: Number(finalGrandTotal.toFixed(2)),
-      quotationCategory: quotationType,
 
-      editExtraRows: quotationType === "edit" ? editExtraRows : [],
+      quotationCategory: quotationType,
       specialNote: noteValue,
-      nomal: isNormalQuotation ? 1 : 0,
       eventDays:
-        isMoreThanDays || showSummary || setShowTypeSelection
+        isMoreThanDays || showSummary
           ? Number(specialNote) || 0
           : invoice.eventDate.length,
-      rehearsalDay: isRehearsal === "Yes" ? 1 : 0,
+      rehearsalDay: invoice.rehearsalDay || "",
+      rehearsalDiscountPercent: Number(rehearsalDiscountPercent),
+      rehearsalAmount: Number(rehearsalAmount.toFixed(2)),
+
+      discountButtonYes:
+        // !isNormalQuotation || discountSelection === "Yes" ? 1 : 0,
+        discountSelection === "Yes" ? 1 : 0,
+
+      multiDays: ismultiDaysQuotation ? 1 : 0,
     };
 
     // --- 6. Axios හරහා API එකට යැවීම ---
@@ -535,12 +616,12 @@ const InvoiceForm = () => {
         finalData,
       );
       if (response.status === 201) {
-        alert("✅ Quotation එක සාර්ථකව Save කළා!");
+        alert("✅ Quotation save successfully!");
         window.location.href = "/";
       }
     } catch (err) {
       console.error("Save Error:", err);
-      alert("❌ Save කිරීමේදී ගැටලුවක් මතු විය. කරුණාකර නැවත උත්සාහ කරන්න.");
+      alert("❌ Save ");
     }
   };
 
@@ -763,6 +844,13 @@ const InvoiceForm = () => {
                     </div>
                   );
                 })}
+                <button
+                  className="btn-add-line"
+                  onClick={() => addLineItem(mainCatKey, subIdx)}
+                  style={{ marginTop: "10px" }}
+                >
+                  + Add {sub.subTitle} Item
+                </button>
               </div>
             </div>
           );
@@ -859,11 +947,18 @@ const InvoiceForm = () => {
                     {prefix}.{subIdx + 1}
                   </span>
                   <input
-                    className="sub-title-input"
+                    className={`sub-title-input ${sub.isNew ? "highlight-input" : ""}`}
                     value={sub.subTitle}
-                    onChange={(e) =>
-                      handleSubTitleChange(mainCatKey, subIdx, e.target.value)
-                    }
+                    autoFocus={sub.isNew}
+                    onFocus={(e) => sub.isNew && e.target.select()}
+                    onChange={(e) => {
+                      // පළමු වරට අකුරු වෙනස් කළ සැණින් isNew අගය ඉවත් කරන්න
+                      const updatedMain = [...invoice[mainCatKey]];
+                      updatedMain[subIdx].subTitle = e.target.value;
+                      updatedMain[subIdx].isNew = false;
+                      setInvoice({ ...invoice, [mainCatKey]: updatedMain });
+                    }}
+                    placeholder="Enter Sub-category Name"
                   />
                 </div>
                 {/* LED Method Selector */}
@@ -1230,6 +1325,9 @@ const InvoiceForm = () => {
   const vat = totalValueOfSupply * 0.18;
   const grandTotal = totalValueOfSupply + vat;
 
+  const vatYes = (subTotal - (invoice.discountLED || 0)) * 0.18;
+  const grandTotalYes = subTotal - (invoice.discountLED || 0) + vatYes;
+
   // subTotal යනු All Systems වල එකතුවයි
   const [editExtraRows, setEditExtraRows] = useState([
     { label: "Total Amount", value: subTotal },
@@ -1244,6 +1342,44 @@ const InvoiceForm = () => {
     updatedRows[index][field] = field === "value" ? Number(val) : val;
     setEditExtraRows(updatedRows);
   };
+
+  const activeSystems = [];
+  if (invoice.ledSystems.some((s) => s.lineItems.length > 0))
+    activeSystems.push("LED");
+  if (invoice.lightSystems.some((s) => s.lineItems.length > 0))
+    activeSystems.push("Light");
+  if (invoice.soundSystems.some((s) => s.lineItems.length > 0))
+    activeSystems.push("Sound");
+  if (invoice.stageAndTruss.some((s) => s.lineItems.length > 0))
+    activeSystems.push("Stage & Truss");
+
+  const dynamicSystemsName =
+    activeSystems.length > 0 ? activeSystems.join(", ") : "Systems";
+
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showSuccessModalDiscount, setShowSuccessModalDiscount] =
+    useState(false);
+  const [finalMsg, setFinalMsg] = useState("");
+
+  let allDaysTotal = 0;
+
+  // Rehearsal total එකතු කිරීම
+  allDaysTotal += invoice.rehearsalDay ? rehearsalAmount : 0;
+
+  // Event days total එකතු කිරීම
+  invoice.eventDate.forEach((date, idx) => {
+    if (date) {
+      allDaysTotal +=
+        eventDayCustomValues[`day_${idx}_amt`] ?? subTotalLEDGroup;
+    }
+  });
+
+  // 2. Discount එක ගණනය කිරීම (මුළු එකතුව මත)
+  // සටහන: මෙතන පාවිච්චි වෙන්නේ මුළු දින ගණනේ එකතුව (allDaysTotal)
+  const finalDiscountAmt = invoice.discount || 0;
+  const finalPayable = allDaysTotal - finalDiscountAmt;
+  const finalAllpayable = finalPayable + powerT + videoT + techT + otherT;
+
   return (
     <div className="invoice-container">
       <h2>Imagine Entertainment - Quotation System</h2>
@@ -1352,6 +1488,16 @@ const InvoiceForm = () => {
               required
               onChange={(e) =>
                 setInvoice({ ...invoice, eventLocation: e.target.value })
+              }
+            />
+          </div>
+          <div className="form-group">
+            <label> Rehearsal Date:</label>
+
+            <input
+              type="date"
+              onChange={(e) =>
+                setInvoice({ ...invoice, rehearsalDay: e.target.value })
               }
             />
           </div>
@@ -1499,187 +1645,975 @@ const InvoiceForm = () => {
       {/* 5. Summary */}
 
       <div className="totals-area">
-        {/* 1. LED Group Section (Systems 1-5) */}
-        <div className="total-line">
-          Total Amount LED, Light, Sound, Stage & Truss:
-          <span>
-            Rs.{" "}
-            {subTotalLEDGroup.toLocaleString(undefined, {
-              minimumFractionDigits: 2,
-            })}
-          </span>
-        </div>
+        {!isMultiDay ? (
+          <>
+            {/* 1. තනි දිනක දර්ශනය (Single Day View) */}
+            <div className="total-line">
+              Total Amount {dynamicSystemsName} per day :
+              <span>
+                Rs.{" "}
+                {subTotalLEDGroup.toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                })}
+              </span>
+            </div>
 
-        <div
-          className="total-line"
-          style={{ color: "#d32f2f", fontWeight: "bold" }}
-        >
-          Discount / Sponsorship for LED, Light, Sound, Stage & Truss:
-          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-            {/* LED Group % Input */}
-            <div style={{ display: "flex", alignItems: "center" }}>
-              <input
-                type="number"
-                placeholder="%"
-                value={
-                  invoice.discountTotalLEDLightingSoundStageTrussPercent || ""
+            <div
+              className="total-line"
+              style={{ color: "#d32f2f", fontWeight: "bold" }}
+            >
+              Discount / Sponsorship for {dynamicSystemsName}:
+              <div
+                style={{ display: "flex", gap: "10px", alignItems: "center" }}
+              >
+                <select
+                  className="special-dropdown"
+                  style={{
+                    padding: "4px 8px",
+                    borderRadius: "4px",
+                    border: "1px solid #d32f2f",
+                  }}
+                  value={discountSelection}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setDiscountSelection(val);
+                    if (val === "No") {
+                      setInvoice({
+                        ...invoice,
+                        discountTotalLEDLightingSoundStageTrussPercent: 0,
+                        discountTotalLEDLightingSoundStageTruss: 0,
+                      });
+                      setShowSaveModal(true);
+                      setShowTypeSelection(true);
+                    } else if (val === "Yes") {
+                      setShowSaveModal(true);
+                      setShowTypeSelection(true);
+                    }
+                  }}
+                >
+                  <option value="Select">Select</option>
+                  <option value="No">No</option>
+                  <option value="Yes">Yes</option>
+                </select>
+              </div>
+            </div>
+
+            <hr
+              style={{
+                margin: "15px 0",
+                border: "0",
+                borderTop: "1px solid #ccc",
+              }}
+            />
+
+            {/* Confirmed view - finalView හෝ finalViewYes දෙකෙන් එකක් ඇත්නම් පෙන්වයි */}
+            {finalView || finalViewYes ? (
+              <div
+                className="final-confirmation-display"
+                style={{
+                  padding: "20px",
+                  backgroundColor: "#f0f7f0",
+                  borderRadius: "8px",
+                  border: "1px solid #2e7d32",
+                  maxWidth: "100%",
+                  margin: "10px 0",
+                }}
+              >
+                <h3
+                  style={{
+                    color: "#2e7d32",
+                    marginTop: 0,
+                    borderBottom: "1px solid #2e7d32",
+                    paddingBottom: "10px",
+                  }}
+                >
+                  Confirmed: {finalView || finalViewYes}
+                </h3>
+
+                <style>{`
+            .info-row { display: flex; justify-content: space-between; margin-bottom: 8px; border-bottom: 1px dashed #c8e6c9; padding-bottom: 4px; }
+            .info-value { font-weight: 500; text-align: right; }
+          `}</style>
+
+                {/* මෙතැනදී (finalView || finalViewYes) භාවිතයෙන් කොන්දේසි පරීක්ෂා කරන්න */}
+                {(finalView === "Normal Quotation" 
+                  ) && (
+                  <>
+                    <div className="info-row">
+                      <strong>Grand Total Amount :</strong>
+                      <span className="info-value">
+                        Rs.{" "}
+                        {(subTotal - (invoice.discount || 0)).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="info-row">
+                      <strong>Wording :</strong>
+                      <span className="info-value">
+                        {numberToWords(
+                          Math.round(subTotal - (invoice.discount || 0)),
+                        )}
+                      </span>
+                    </div>
+                  </>
+                )}
+                     {(
+                  finalViewYes === "Normal Quotation") && (
+                  <>
+                    <div className="info-row">
+                      <strong>Grand Total Amount :</strong>
+                      <span className="info-value">
+                        Rs.{" "}
+                        {(subTotal - (invoice.discountLED || 0)).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="info-row">
+                      <strong>Wording :</strong>
+                      <span className="info-value">
+                        {numberToWords(
+                          Math.round(subTotal - (invoice.discountLED || 0)),
+                        )}
+                      </span>
+                    </div>
+                  </>
+                )}
+
+                {(finalView === "Normal Quotation with Discount" ||
+                  finalViewYes === "Normal Quotation with Discount") && (
+                  <>
+                    <div className="info-row">
+                      <strong>Sub Total Amount :</strong>
+                      <span className="info-value">
+                        Rs.{" "}
+                        {(
+                          subTotal - (invoice.discountLED || 0)
+                        ).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="info-row">
+                      <strong>Less: Special Discount :</strong>
+                      <span className="info-value">
+                        Rs. {(invoice.discount || 0).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="info-row">
+                      <strong>Grand Total Amount :</strong>
+                      <span className="info-value">
+                        Rs. {totalValueOfSupply.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="info-row">
+                      <strong>Wording :</strong>
+                      <span className="info-value">
+                        {numberToWords(Math.round(totalValueOfSupply))}
+                      </span>
+                    </div>
+                  </>
+                )}
+
+                {/* VAT Quotation කොටස් ද මේ ආකාරයටම (finalView || finalViewYes) භාවිතයෙන් ලියන්න */}
+                {finalView === "Vat Quotation" && (
+                  <>
+                    <div className="info-row">
+                      <strong>Total Value of Supply :</strong>
+                      <span className="info-value">
+                        Rs.{" "}
+                        {subTotal.toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                        })}
+                      </span>
+                    </div>
+                    <div className="info-row">
+                      <strong>VAT Amount(Total Value of Supply @18%) :</strong>
+                      <span className="info-value">
+                        Rs.{" "}
+                        {vat.toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                        })}
+                      </span>
+                    </div>
+                    <div className="info-row">
+                      <strong>Total Amount Including VAT :</strong>
+                      <span className="info-value">
+                        Rs.{" "}
+                        {(vat + subTotal).toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                        })}
+                      </span>
+                    </div>
+                    <div className="info-row">
+                      <strong>Wording :</strong>
+                      <span className="info-value">
+                        {numberToWords(Math.round(subTotal))}
+                      </span>
+                    </div>
+                  </>
+                )}
+
+                {finalViewYes === "Vat Quotation" && (
+                  <>
+                    <div className="info-row">
+                      <strong>Total Value of Supply :</strong>
+                      <span className="info-value">
+                        Rs.{" "}
+                        {(subTotal - invoice.discountLED).toLocaleString(
+                          undefined,
+                          {
+                            minimumFractionDigits: 2,
+                          },
+                        )}
+                      </span>
+                    </div>
+                    <div className="info-row">
+                      <strong>VAT Amount(Total Value of Supply @18%) :</strong>
+                      <span className="info-value">
+                        Rs.{" "}
+                        {(
+                          (subTotal - invoice.discountLED) *
+                          0.18
+                        ).toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                        })}
+                      </span>
+                    </div>
+                    <div className="info-row">
+                      <strong>Total Amount Including VAT :</strong>
+                      <span className="info-value">
+                        Rs.{" "}
+                        {(
+                          (subTotal - invoice.discountLED) * 0.18 +
+                          (subTotal - invoice.discountLED)
+                        ).toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                        })}
+                      </span>
+                    </div>
+                    <div className="info-row">
+                      <strong>Wording :</strong>
+                      <span className="info-value">
+                        {numberToWords(
+                          Math.round(
+                            (subTotal - invoice.discountLED) * 0.18 +
+                              (subTotal - invoice.discountLED),
+                          ),
+                        )}
+                      </span>
+                    </div>
+                  </>
+                )}
+
+                {finalView === "Vat Quotation with Discount" && (
+                  <>
+                    <div className="info-row">
+                      <strong>Sub Total Amount :</strong>
+                      <span className="info-value">
+                        Rs.{" "}
+                        {subTotal.toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                        })}
+                      </span>
+                    </div>
+                    <div className="info-row">
+                      <strong>Less: Special Discount :</strong>
+                      <span className="info-value">
+                        Rs.{" "}
+                        {(invoice.discount || 0).toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                        })}
+                      </span>
+                    </div>
+                    <div className="info-row">
+                      <strong>Total Value of Supply :</strong>
+                      <span className="info-value">
+                        Rs.{" "}
+                        {totalValueOfSupply.toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                        })}
+                      </span>
+                    </div>
+                    <div className="info-row">
+                      <strong>VAT Amount (Total value of Supply @18%) :</strong>
+                      <span className="info-value">
+                        Rs.{" "}
+                        {vat.toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                        })}
+                      </span>
+                    </div>
+
+                    <div className="info-row">
+                      <strong>Total Amount Including VAT :</strong>
+                      <span className="info-value">
+                        Rs.{" "}
+                        {grandTotal.toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                        })}
+                      </span>
+                    </div>
+                    <div className="info-row">
+                      <strong>Wording :</strong>
+                      <span className="info-value">
+                        {numberToWords(Math.round(grandTotal))}
+                      </span>
+                    </div>
+                  </>
+                )}
+                {finalViewYes === "Vat Quotation with Discount" && (
+                  <>
+                    <div className="info-row">
+                      <strong>Sub Total Amount :</strong>
+                      <span className="info-value">
+                        Rs.{" "}
+                        {(subTotal - invoice.discountLED).toLocaleString(
+                          undefined,
+                          {
+                            minimumFractionDigits: 2,
+                          },
+                        )}
+                      </span>
+                    </div>
+                    <div className="info-row">
+                      <strong>Less: Special Discount :</strong>
+                      <span className="info-value">
+                        Rs.{" "}
+                        {(invoice.discount || 0).toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                        })}
+                      </span>
+                    </div>
+                    <div className="info-row">
+                      <strong>Total Value of Supply :</strong>
+                      <span className="info-value">
+                        Rs.{" "}
+                        {(
+                          subTotal -
+                          invoice.discountLED -
+                          invoice.discount
+                        ).toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                        })}
+                      </span>
+                    </div>
+                    <div className="info-row">
+                      <strong>VAT Amount (Total value of Supply @18%) :</strong>
+                      <span className="info-value">
+                        Rs.{" "}
+                        {(
+                          (subTotal - invoice.discountLED - invoice.discount) *
+                          0.18
+                        ).toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                        })}
+                      </span>
+                    </div>
+
+                    <div className="info-row">
+                      <strong>Total Amount Including VAT :</strong>
+                      <span className="info-value">
+                        Rs.{" "}
+                        {(
+                          subTotal -
+                          invoice.discountLED -
+                          invoice.discount +
+                          (subTotal - invoice.discountLED - invoice.discount) *
+                            0.18
+                        ).toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                        })}
+                      </span>
+                    </div>
+                    <div className="info-row">
+                      <strong>Wording :</strong>
+                      <span className="info-value">
+                        {numberToWords(
+                          Math.round(
+                            subTotal -
+                              invoice.discountLED -
+                              invoice.discount +
+                              (subTotal -
+                                invoice.discountLED -
+                                invoice.discount) *
+                                0.18,
+                          ),
+                        )}
+                      </span>
+                    </div>
+                  </>
+                )}
+
+                <div
+                  className="info-row"
+                  style={{ borderBottom: "none", marginTop: "10px" }}
+                >
+                  <strong>Mode of Payment :</strong>
+                  <span className="info-value">
+                    {(finalView || finalViewYes || "").includes("Vat")
+                      ? 'cheque in favour of "Imagine Entertainment (Pvt) Ltd"'
+                      : "Cash"}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <h1 style={{ color: "#ccc", textAlign: "center" }}>
+                No Quotation Saved Yet
+              </h1>
+            )}
+          </>
+        ) : (
+          /* --- 2. බහු-දින දර්ශනය (Multi-day View) --- */
+          <div
+            className="multi-day-summary"
+            style={{
+              backgroundColor: "#fefefe",
+              padding: "15px",
+              borderRadius: "8px",
+              border: "1px solid #ccc",
+            }}
+          >
+            <h3
+              style={{
+                color: "#1a237e",
+                borderBottom: "2px solid #1a237e",
+                paddingBottom: "5px",
+              }}
+            >
+              Event Summary (Multi-day)
+            </h3>
+
+            <div className="info-row">
+              <strong>Total Amount for {dynamicSystemsName} Per Day:</strong>
+              <span className="info-value">
+                Rs. {subTotalLEDGroup.toLocaleString()}
+              </span>
+            </div>
+
+            {/* {invoice.rehearsalDay && (
+              <div className="info-row">
+                <strong>Rehearsal Day Charge:</strong>
+                <span className="info-value">
+                  Rs. {(subTotalLEDGroup * 0.5).toLocaleString()}
+                </span>
+              </div>
+            )} */}
+
+            {invoice.rehearsalDay && (
+              <div
+                className="info-row"
+                style={{
+                  alignItems: "center",
+                  backgroundColor: "#fff9c4",
+                  padding: "10px",
+                  borderRadius: "5px",
+                  marginBottom: "10px",
+                }}
+              >
+                <div style={{ flex: 1 }}>
+                  <strong>Rehearsal Day ({invoice.rehearsalDay}):</strong>
+                </div>
+
+                <div
+                  style={{ display: "flex", gap: "10px", alignItems: "center" }}
+                >
+                  {/* Percentage Input */}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "2px",
+                    }}
+                  >
+                    <input
+                      type="number"
+                      value={rehearsalDiscountPercent}
+                      onChange={(e) => {
+                        const pct = parseFloat(e.target.value) || 0;
+                        setRehearsalDiscountPercent(pct);
+                        setRehearsalAmount((subTotalLEDGroup * pct) / 100);
+                      }}
+                      style={{
+                        width: "50px",
+                        padding: "4px",
+                        textAlign: "right",
+                        border: "1px solid #fbc02d",
+                      }}
+                    />
+                    <span style={{ fontWeight: "bold" }}>%</span>
+                  </div>
+
+                  <span style={{ fontWeight: "bold" }}>=</span>
+
+                  {/* Rupees Amount Input */}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "2px",
+                    }}
+                  >
+                    <span style={{ fontSize: "12px" }}>Rs.</span>
+                    <input
+                      type="number"
+                      value={rehearsalAmount}
+                      onChange={(e) => {
+                        const amt = parseFloat(e.target.value) || 0;
+                        setRehearsalAmount(amt);
+                        const pct =
+                          subTotalLEDGroup > 0
+                            ? (amt / subTotalLEDGroup) * 100
+                            : 0;
+                        setRehearsalDiscountPercent(pct.toFixed(0));
+                      }}
+                      style={{
+                        width: "100px",
+                        padding: "4px",
+                        textAlign: "right",
+                        border: "1px solid #fbc02d",
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+            {invoice.eventDate.map((date, idx) => {
+              if (!date) return null;
+
+              // මෙම දවසේ දැනට පවතින අගයන් ලබා ගැනීම (නැතිනම් default base total එක පෙන්වයි)
+              const currentDayAmt =
+                eventDayCustomValues[`day_${idx}_amt`] ?? subTotalLEDGroup;
+              const currentDayPct =
+                eventDayCustomValues[`day_${idx}_pct`] ?? 100;
+
+              return (
+                <div
+                  className="info-row"
+                  key={idx}
+                  style={{
+                    alignItems: "center",
+                    marginBottom: "10px",
+                    padding: "5px",
+                    borderBottom: "1px solid #eee",
+                  }}
+                >
+                  <div style={{ flex: 1 }}>
+                    <strong>
+                      {idx + 1}
+                      {idx === 0
+                        ? "st"
+                        : idx === 1
+                          ? "nd"
+                          : idx === 2
+                            ? "rd"
+                            : "th"}{" "}
+                      Day ({date}):
+                    </strong>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "8px",
+                      alignItems: "center",
+                    }}
+                  >
+                    {/* Day Percentage Input */}
+                    <div style={{ display: "flex", alignItems: "center" }}>
+                      <input
+                        type="number"
+                        value={currentDayPct}
+                        onChange={(e) => {
+                          const pct = parseFloat(e.target.value) || 0;
+                          const newAmt = (subTotalLEDGroup * pct) / 100;
+                          setEventDayCustomValues((prev) => ({
+                            ...prev,
+                            [`day_${idx}_pct`]: pct,
+                            [`day_${idx}_amt`]: newAmt,
+                          }));
+                        }}
+                        style={{
+                          width: "50px",
+                          padding: "2px",
+                          textAlign: "right",
+                        }}
+                      />
+                      <span style={{ marginLeft: "2px" }}>%</span>
+                    </div>
+
+                    <span>=</span>
+
+                    {/* Day Rupees Input */}
+                    <div style={{ display: "flex", alignItems: "center" }}>
+                      <span style={{ fontSize: "11px", marginRight: "2px" }}>
+                        Rs.
+                      </span>
+                      <input
+                        type="number"
+                        value={currentDayAmt}
+                        onChange={(e) => {
+                          const amt = parseFloat(e.target.value) || 0;
+                          const pct =
+                            subTotalLEDGroup > 0
+                              ? (amt / subTotalLEDGroup) * 100
+                              : 0;
+                          setEventDayCustomValues((prev) => ({
+                            ...prev,
+                            [`day_${idx}_amt`]: amt,
+                            [`day_${idx}_pct`]: pct.toFixed(0),
+                          }));
+                        }}
+                        style={{
+                          width: "90px",
+                          padding: "2px",
+                          textAlign: "right",
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+            {(() => {
+              // 1. වෙනස් කළ දිනවල අගයන් එකතු කිරීම
+              let allDaysTotal = 0;
+
+              // Rehearsal total එකතු කිරීම
+              allDaysTotal += invoice.rehearsalDay ? rehearsalAmount : 0;
+
+              // Event days total එකතු කිරීම
+              invoice.eventDate.forEach((date, idx) => {
+                if (date) {
+                  allDaysTotal +=
+                    eventDayCustomValues[`day_${idx}_amt`] ?? subTotalLEDGroup;
                 }
-                // පේළි අංක 987 අසල ඇති % Input එක සඳහා:
-                onChange={(e) => {
-                  const pct = Number(e.target.value);
-                  const amt = (subTotalLEDGroup * pct) / 100;
+              });
 
-                  const newNetLED = subTotalLEDGroup - amt;
-                  const newSubTotal = newNetLED + otherCategoriesTotal;
+              // 2. Discount එක ගණනය කිරීම (මුළු එකතුව මත)
+              // සටහන: මෙතන පාවිච්චි වෙන්නේ මුළු දින ගණනේ එකතුව (allDaysTotal)
+              const finalDiscountAmt = invoice.discount || 0;
+              const finalPayable = allDaysTotal - finalDiscountAmt;
+              const finalAllpayable =
+                finalPayable + powerT + videoT + techT + otherT;
 
-                  setInvoice({
-                    ...invoice,
-                    discountTotalLEDLightingSoundStageTrussPercent: pct,
-                    discountTotalLEDLightingSoundStageTruss: amt,
-                    discount:
-                      (newSubTotal * (invoice.discountPercent || 0)) / 100, // මෙය එකතු කරන්න
-                  });
-                }}
-                style={{
-                  width: "60px",
-                  textAlign: "right",
-                  padding: "2px 5px",
-                }}
-              />
-              <span style={{ marginLeft: "5px" }}>%</span>
-            </div>
+              return (
+                <>
+                  {/* Total for All Days පේළිය */}
+                  <div
+                    className="info-row"
+                    style={{
+                      borderTop: "2px solid #333",
+                      marginTop: "10px",
+                      paddingTop: "5px",
+                    }}
+                  >
+                    <strong>Total Amount for All days:</strong>
+                    <span className="info-value" style={{ fontWeight: "bold" }}>
+                      Rs.{" "}
+                      {allDaysTotal.toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                      })}
+                    </span>
+                  </div>
 
-            <span>Rs.</span>
+                  {/* Less % Special Discount පේළිය (Input සහිතව) */}
+                  <div
+                    className="info-row"
+                    style={{
+                      alignItems: "center",
+                      color: "#d32f2f",
+                      margin: "10px 0",
+                    }}
+                  >
+                    <strong>
+                      Less % special Discount {dynamicSystemsName} :
+                    </strong>
 
-            {/* LED Group Rs. Input */}
-            <input
-              type="number"
-              className="discount-input"
-              value={invoice.discountTotalLEDLightingSoundStageTruss || ""}
-              onChange={(e) => {
-                const amt = Number(e.target.value);
-                const pct =
-                  subTotalLEDGroup > 0 ? (amt / subTotalLEDGroup) * 100 : 0;
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "10px",
+                        alignItems: "center",
+                      }}
+                    >
+                      {/* Percentage Input */}
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "2px",
+                        }}
+                      >
+                        <input
+                          type="number"
+                          value={invoice.discountPercent || ""}
+                          onChange={(e) => {
+                            const pct = parseFloat(e.target.value) || 0;
+                            const amt = (allDaysTotal * pct) / 100;
+                            setInvoice({
+                              ...invoice,
+                              discountPercent: pct,
+                              discount: amt,
+                            });
+                          }}
+                          style={{
+                            width: "50px",
+                            padding: "4px",
+                            textAlign: "right",
+                            border: "1px solid #ffcdd2",
+                            color: "#d32f2f",
+                          }}
+                        />
+                        <span style={{ fontWeight: "bold" }}>%</span>
+                      </div>
 
-                // අලුත් Sub Total එක ගණනය කිරීම (LED Net + Others)
-                const newNetLEDGroup = subTotalLEDGroup - amt;
-                const newSubTotal = newNetLEDGroup + otherCategoriesTotal;
+                      <span>=</span>
 
-                setInvoice({
-                  ...invoice,
-                  discountTotalLEDLightingSoundStageTruss: amt,
-                  discountTotalLEDLightingSoundStageTrussPercent: parseFloat(
-                    pct.toFixed(2),
-                  ),
-                  // Overall discount එක අලුත් SubTotal එකට අනුව නැවත සකසන්න
-                  discount:
-                    (newSubTotal * (invoice.discountPercent || 0)) / 100,
-                });
-              }}
-              style={{ width: "120px", textAlign: "right", padding: "2px 5px" }}
-            />
+                      {/* Rupees Input */}
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "2px",
+                        }}
+                      >
+                        <span style={{ fontSize: "12px" }}>Rs.</span>
+                        <input
+                          type="number"
+                          value={invoice.discount || ""}
+                          onChange={(e) => {
+                            const amt = parseFloat(e.target.value) || 0;
+                            const pct =
+                              allDaysTotal > 0 ? (amt / allDaysTotal) * 100 : 0;
+                            setInvoice({
+                              ...invoice,
+                              discount: amt,
+                              discountPercent: pct.toFixed(2),
+                            });
+                          }}
+                          style={{
+                            width: "100px",
+                            padding: "4px",
+                            textAlign: "right",
+                            border: "1px solid #ffcdd2",
+                            color: "#d32f2f",
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* අවසාන ශුද්ධ මුදල (Net Amount) */}
+                  <div
+                    className="info-row"
+                    style={{
+                      backgroundColor: "#e8f5e9",
+                      padding: "10px",
+                      borderRadius: "5px",
+                    }}
+                  >
+                    <strong>Total Amount After the discount :</strong>
+                    <span
+                      className="info-value"
+                      style={{
+                        color: "#2e7d32",
+                        fontSize: "18px",
+                        fontWeight: "bold",
+                      }}
+                    >
+                      Rs.{" "}
+                      {finalPayable.toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                      })}
+                    </span>
+                    <div
+                      className="final-action-section"
+                      style={{ marginTop: "20px", textAlign: "right" }}
+                    >
+                      <label
+                        style={{
+                          display: "block",
+                          marginBottom: "8px",
+                          fontWeight: "bold",
+                          color: "#1a237e",
+                        }}
+                      >
+                        Select Quotation Type to Save:
+                      </label>
+
+                      <select
+                        style={{
+                          padding: "12px",
+                          borderRadius: "5px",
+                          border: "2px solid #1a237e",
+                          width: "250px",
+                          fontSize: "14px",
+                          cursor: "pointer",
+                          backgroundColor: "#fff",
+                        }}
+                        value={quotationType} // දැනට තියෙන state එකම පාවිච්චි කරන්න
+                        onChange={(e) => {
+                          const selectedType = e.target.value;
+                          if (selectedType !== "Select") {
+                            setQuotationType(selectedType);
+
+                            // පණිවිඩය සකස් කර Modal එක විවෘත කිරීම
+                            setFinalMsg(
+                              `You have selected ${selectedType}. Do you want to proceed with saving?`,
+                            );
+
+                            // ඔබ මීට පෙර හැදූ logic එක අනුව නිවැරදි Modal එක පෙන්වීම
+                            if (discountSelection === "Yes") {
+                              // setShowSuccessModalDiscount(true);
+                            } else {
+                              setShowSuccessModal(true);
+                            }
+                          }
+                        }}
+                      >
+                        <option value="Select">-- Select Type --</option>
+                        <option value="Normal Quotation More Days">
+                          Normal Quotation
+                        </option>
+                        <option value="Vat Quotation More Days">
+                          Vat Quotation
+                        </option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {finalView && (
+                    <div
+                      className="final-confirmation-display"
+                      style={{
+                        padding: "20px",
+                        backgroundColor: "#f0f7f0",
+                        borderRadius: "8px",
+                        border: "1px solid #2e7d32",
+                        maxWidth: "100%",
+                        margin: "10px 0",
+                      }}
+                    >
+                      <h3
+                        style={{
+                          color: "#2e7d32",
+                          marginTop: 0,
+                          borderBottom: "1px solid #2e7d32",
+                          paddingBottom: "10px",
+                        }}
+                      >
+                        Confirmed: {finalView}
+                      </h3>
+
+                      <style>{`
+            .info-row { display: flex; justify-content: space-between; margin-bottom: 8px; border-bottom: 1px dashed #c8e6c9; padding-bottom: 4px; }
+            .info-value { font-weight: 500; text-align: right; }
+          `}</style>
+
+                      {/* Normal Quotation More Days දර්ශනය */}
+                      {finalView === "Normal Quotation More Days" && (
+                        <>
+                          <div className="info-row">
+                            <strong>Grand Total Amount :</strong>
+                            <span
+                              className="info-value"
+                              style={{ fontWeight: "bold" }}
+                            >
+                              Rs.{" "}
+                              {finalAllpayable.toLocaleString(undefined, {
+                                minimumFractionDigits: 2,
+                              })}
+                            </span>
+                          </div>
+                          <div className="info-row">
+                            <strong>Wording :</strong>
+                            <span className="info-value">
+                              {numberToWords(Math.round(finalAllpayable))}
+                            </span>
+                          </div>
+
+                          <div
+                            className="info-row"
+                            style={{ marginTop: "10px", borderBottom: "none" }}
+                          >
+                            <strong>Mode of Payment :</strong>
+                            <span className="info-value">Cash</span>
+                          </div>
+                        </>
+                      )}
+
+                      {/* Vat Quotation More Days දර්ශනය */}
+                      {finalView === "Vat Quotation More Days" && (
+                        <>
+                          <div className="info-row">
+                            <strong>Total Value of Supply :</strong>
+                            <span className="info-value">
+                              Rs.{" "}
+                              {finalAllpayable.toLocaleString(undefined, {
+                                minimumFractionDigits: 2,
+                              })}
+                            </span>
+                          </div>
+                          <div className="info-row">
+                            <strong>
+                              VAT Amount (Total Value of Supply @18%) :
+                            </strong>
+                            <span className="info-value">
+                              Rs.{" "}
+                              {(finalAllpayable * 0.18).toLocaleString(
+                                undefined,
+                                {
+                                  minimumFractionDigits: 2,
+                                },
+                              )}
+                            </span>
+                          </div>
+                          <div
+                            className="info-row"
+                            style={{
+                              fontWeight: "bold",
+                              borderTop: "1px solid #2e7d32",
+                              paddingTop: "5px",
+                            }}
+                          >
+                            <strong>Total Amount Including VAT :</strong>
+                            <span className="info-value">
+                              Rs.{" "}
+                              {(
+                                finalAllpayable * 0.18 +
+                                finalAllpayable
+                              ).toLocaleString(undefined, {
+                                minimumFractionDigits: 2,
+                              })}
+                            </span>
+                          </div>
+                          <div className="info-row">
+                            <strong>Wording :</strong>
+                            <span className="info-value">
+                              {numberToWords(
+                                Math.round(
+                                  finalAllpayable * 0.18 + finalAllpayable,
+                                ),
+                              )}
+                            </span>
+                          </div>
+
+                          <div
+                            className="info-row"
+                            style={{ marginTop: "10px", borderBottom: "none" }}
+                          >
+                            <strong>Mode of Payment :</strong>
+                            <span className="info-value">
+                              cheque in favour of "Imagine Entertainment (Pvt)
+                              Ltd"
+                            </span>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
-        </div>
-
-        <hr
-          style={{ margin: "15px 0", border: "0", borderTop: "1px solid #ccc" }}
-        />
-
-        {/* 2. Overall Totals Section */}
-        <div className="total-line" style={{ fontWeight: "600" }}>
-          Total Amount (All Systems):
-          <span>
-            Rs.{" "}
-            {subTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-          </span>
-        </div>
-
-        <div
-          className="total-line"
-          style={{ color: "#d32f2f", fontWeight: "bold" }}
-        >
-          Overall Discount / Sponsorship:
-          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-            {/* Overall % Input */}
-            <div style={{ display: "flex", alignItems: "center" }}>
-              <input
-                type="number"
-                placeholder="%"
-                value={invoice.discountPercent || ""}
-                onChange={(e) => {
-                  const pct = Number(e.target.value);
-                  const amt = (subTotal * pct) / 100;
-                  setInvoice({
-                    ...invoice,
-                    discountPercent: pct,
-                    discount: amt,
-                  });
-                }}
-                style={{
-                  width: "60px",
-                  textAlign: "right",
-                  padding: "2px 5px",
-                }}
-              />
-              <span style={{ marginLeft: "5px" }}>%</span>
-            </div>
-
-            <span>Rs.</span>
-
-            {/* Overall Rs. Input */}
-            <input
-              type="number"
-              className="discount-input"
-              value={invoice.discount || ""}
-              onChange={(e) => {
-                const amt = Number(e.target.value);
-                const pct = subTotal > 0 ? (amt / subTotal) * 100 : 0;
-                setInvoice({
-                  ...invoice,
-                  discount: amt,
-                  discountPercent: parseFloat(pct.toFixed(2)),
-                });
-              }}
-              style={{ width: "120px", textAlign: "right", padding: "2px 5px" }}
-            />
-          </div>
-        </div>
-
-        {/* 3. Final Calculation Summary */}
-        <div
-          className="total-line"
-          style={{ borderTop: "1px solid #eee", paddingTop: "10px" }}
-        >
-          Total Value of Supply:
-          <span style={{ fontWeight: "700" }}>
-            Rs.{" "}
-            {totalValueOfSupply.toLocaleString(undefined, {
-              minimumFractionDigits: 2,
-            })}
-          </span>
-        </div>
-
-        <div className="total-line">
-          VAT Amount (18%):
-          <span>
-            Rs. {vat.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-          </span>
-        </div>
-
-        <div
-          className="grand-total"
-          style={{
-            backgroundColor: "#f8f9fa",
-            padding: "10px",
-            borderRadius: "4px",
-          }}
-        >
-          Total Amount including VAT:
-          <span style={{ color: "#1b5e20" }}>
-            Rs.{" "}
-            {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-          </span>
-        </div>
+        )}
       </div>
 
       <button className="btn-generate" onClick={handleSaveQuotation}>
@@ -1695,7 +2629,7 @@ const InvoiceForm = () => {
                 {/* මුල් පියවර: Normal / More than days */}
                 {!showTypeSelection && !showEditConfirmation ? (
                   <>
-                    <h3 style={{ color: "#1a237e" }}>Save Quotation</h3>
+                    {/* <h3 style={{ color: "#1a237e" }}>Save Quotation</h3>
                     <div className="popup-actions">
                       <button
                         className="btn-normal"
@@ -1709,12 +2643,12 @@ const InvoiceForm = () => {
                       >
                         More than days
                       </button>
-                    </div>
+                    </div> */}
                   </>
                 ) : showEditConfirmation ? (
                   /* 2. "edit" තෝරා Confirm කළ පසු පෙන්වන Edit Notice Popup එක */
                   <>
-                    <h3 style={{ color: "#d32f2f", marginBottom: "15px" }}>
+                    {/* <h3 style={{ color: "#d32f2f", marginBottom: "15px" }}>
                       Edit Quotation Notice
                     </h3>
 
@@ -1855,7 +2789,7 @@ const InvoiceForm = () => {
                       >
                         Cancel
                       </button>
-                    </div>
+                    </div> */}
                   </>
                 ) : (
                   /* 3. Selection පියවර (Category තෝරා ගැනීම) */
@@ -1884,14 +2818,17 @@ const InvoiceForm = () => {
                           border: "2px solid #2e7d32",
                         }}
                       >
-                        <option value="Normal">Normal Quotation</option>
-                        <option value="Non-Tax with Discount">
-                          Non-Tax with Discount
+                        <option value="Normal Quotation">
+                          Normal Quotation
                         </option>
-                        <option value="Non-Tax without Discount">
-                          Non-Tax without Discount
+                        <option value="Normal Quotation with Discount">
+                          Normal Quotation with Discount
                         </option>
-                        <option value="edit">Edit Quotation</option>
+                        <option value="Vat Quotation">Vat Quotation</option>
+                        <option value="Vat Quotation with Discount">
+                          Vat Quotation with Discount
+                        </option>
+                        {/* <option value="edit">Edit Quotation</option> */}
                       </select>
                     </div>
 
@@ -1900,25 +2837,36 @@ const InvoiceForm = () => {
                         className="btn-confirm-save"
                         style={{ backgroundColor: "#2e7d32", color: "white" }}
                         onClick={() => {
-                          if (quotationType === "edit") {
-                            // පළමු row එකට පවතින subTotal එක ලබා දීම
-                            setEditExtraRows([
-                              { label: "Total Amount", value: subTotal },
-                            ]);
-                            setShowEditConfirmation(true);
-                          } else {
-                            saveToDatabase("Normal");
+                          // දැන් මෙතනදී පරීක්ෂා කරන්නේ අපේ state එකයි
+                          if (discountSelection === "No") {
+                            setFinalMsg(
+                              `You have selected ${quotationType}. Do you want to proceed with saving?`,
+                            );
+                            setShowSuccessModal(true);
+                          } else if (discountSelection === "Yes") {
+                            setFinalMsg(
+                              `You have selected ${quotationType}. Do you want to proceed with saving?`,
+                            );
+                            // මෙහිදී ඔබ භාවිතා කරන නිවැරදි function එක කැඳවන්න
+                            if (
+                              typeof setShowSuccessModalDiscount === "function"
+                            ) {
+                              setShowSuccessModalDiscount(true);
+                            } else {
+                              // සමහරවිට ඔබ වැරදීමකින් showSuccessModalDiscount(true) ලෙස ලියා තිබුණා විය හැක
+                              // එය state setter එකක් නම් setShowSuccessModalDiscount(true) විය යුතුය
+                            }
                           }
                         }}
                       >
                         Confirm & Save
                       </button>
-                      <button
+                      {/* <button
                         className="btn-close"
                         onClick={() => setShowTypeSelection(false)}
                       >
                         Back
-                      </button>
+                      </button> */}
                     </div>
                   </>
                 )}
@@ -1931,7 +2879,7 @@ const InvoiceForm = () => {
                 <h3 style={{ color: "#d32f2f" }}>Special Event Note</h3>
 
                 {/* දවස් ගණන (Days) - මෙතනට පාවිච්චි කරන්නේ specialNote */}
-                <div className="NumberDaysFull">
+                {/* <div className="NumberDaysFull">
                   <label>How many days do event?</label>
                   <input
                     type="number"
@@ -1939,10 +2887,10 @@ const InvoiceForm = () => {
                     value={specialNote}
                     onChange={(e) => setSpecialNote(e.target.value)} // දවස් ගණන පමණක් මෙතනින් වෙනස් වේ
                   />
-                </div>
+                </div> */}
 
                 {/* Rehearsal එක (Yes/No) - මෙතනට පාවිච්චි කරන්නේ අලුත් isRehearsal state එක */}
-                <div className="NumberDaysFull">
+                {/* <div className="NumberDaysFull">
                   <label>Is this a rehearsal?</label>
                   <select
                     className="special-dropdown"
@@ -1964,7 +2912,7 @@ const InvoiceForm = () => {
                   >
                     Back
                   </button>
-                </div>
+                </div> */}
               </>
             )}
 
@@ -2973,6 +3921,54 @@ const InvoiceForm = () => {
           </div>
         </div>
       )}
+      <ShowSuccessModal
+        show={showSuccessModal}
+        onClose={() => setShowSuccessModal(false)}
+        onConfirm={() => {
+          setFinalView(quotationType);
+          setShowSuccessModal(false);
+          setShowSaveModal(false);
+          // මෙතනදී saveToDatabase(quotationType) call කළ හැක
+        }}
+        quotationType={quotationType}
+        dynamicSystemsName={dynamicSystemsName}
+        invoice={invoice}
+        subTotal={subTotal}
+        subTotalLEDGroup={subTotalLEDGroup}
+        totalValueOfSupply={totalValueOfSupply}
+        vat={vat}
+        grandTotal={grandTotal}
+        vatYes={vatYes}
+        grandTotalYes={grandTotalYes}
+        numberToWords={numberToWords}
+        setInvoice={setInvoice}
+        finalPayable={finalPayable}
+        finalAllpayable={finalAllpayable}
+      />
+
+      <ShowSuccessModalDiscount
+        show={showSuccessModalDiscount}
+        onClose={() => setShowSuccessModalDiscount(false)}
+        onConfirm={() => {
+          setFinalViewYes(quotationType);
+          setShowSuccessModalDiscount(false);
+          setShowSaveModal(false);
+          // මෙතනදී saveToDatabase(quotationType) call කළ හැක
+
+        }}
+        quotationType={quotationType}
+        dynamicSystemsName={dynamicSystemsName}
+        invoice={invoice}
+        subTotal={subTotal}
+        subTotalLEDGroup={subTotalLEDGroup}
+        totalValueOfSupply={totalValueOfSupply}
+        vat={vat}
+        grandTotal={grandTotal}
+        vatYes={vatYes}
+        grandTotalYes={grandTotalYes}
+        numberToWords={numberToWords}
+        setInvoice={setInvoice}
+      />
     </div>
   );
 };

@@ -43,7 +43,7 @@ const VerifyOTPForgot = () => {
 
     try {
       const response = await fetch(
-        "https://imagine-entertaintment.onrender.com/api/user/verify-otpForgot",
+        "https://imagine-entertainment-invoice-system.onrender.com/api/user/verify-otpForgot",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

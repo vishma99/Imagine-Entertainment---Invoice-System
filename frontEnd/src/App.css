@@ -10,6 +10,7 @@
   flex: 1; /* Sidebar එකට පසු ඉතිරි මුළු ඉඩම ලබා ගනී */
   padding: 20px;
   background-color: #f4f7fe;
+
   /* මෙහි margin-left: 250px වැනි දේවල් තිබේ නම් ඒවා ඉවත් කරන්න */
 }
 
@@ -20,11 +21,11 @@
   display: flex;
   justify-content: center; /* Form එක තිරස් අතට මැදට ගනී */
   align-items: center; /* Form එක සිරස් අතට මැදට ගනී */
- background: linear-gradient(
+  background: linear-gradient(
     135deg,
     #1e3c72 0%,
     #2a5298 100%
-  );/* Register පිටුවේ තද නිල් පැහැය මුළු පසුබිමටම ලබා දීමට */
+  ); /* Register පිටුවේ තද නිල් පැහැය මුළු පසුබිමටම ලබා දීමට */
 }
 
 /* Register පිටුවේ ඇති card එක සම්පූර්ණයෙන්ම වමට තල්ලු වී ඇත්නම් */

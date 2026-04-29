@@ -3,7 +3,13 @@ import mongoose from "mongoose";
 const quotationSchema = new mongoose.Schema({
   invoiceNo: String,
   date: String,
-  eventDate: [String], // Array එකක් ලෙස (දින කිහිපයක් තිබිය හැකි නිසා)
+  eventDate: [
+    {
+      date: String,
+      percentage: { type: Number, default: 100 },
+      amount: { type: Number, default: 0 },
+    },
+  ],
   ClientName: String,
   clientTIN: String,
   clientPosition: String,
@@ -13,8 +19,12 @@ const quotationSchema = new mongoose.Schema({
   eventLocation: String,
   eventAdditionalInfo: String,
   quotationNo: String,
-  invoiceType: String,
-  invoiceFooterType: String,
+  invoiceType: { type: String, default: "Tax Invoice" },
+  proformaCategory: { type: String, default: "Quotation Type" },
+  advanceRequestedAmount: { type: Number },
+  advanceRequestedAmountPercent: { type: Number },
+  RequestingBalancePayment: { type: Number },
+  RequestingBalancePaymentNo: { type: String },
 
   // Schema එකේ අවසාන හරියට මේවා එකතු කරන්න
   performancecustomDiscount: { type: Number, default: 0 },
@@ -168,12 +178,15 @@ const quotationSchema = new mongoose.Schema({
   totalVideoAnimation: Number, // 6 එකතුව
   totalTechnicianTransport: Number, // 7 එකතුව
   totalOtherServices: Number,
-  nomal: Number,
+  discountButtonYes: Number,
+  multiDays: Number,
   discountTotalLEDLightingSoundStageTruss: { type: Number, default: 0 },
   discountTotalLEDLightingSoundStageTrussPercent: { type: Number, default: 0 },
 
   eventDays: Number,
-  rehearsalDay: Number,
+  rehearsalDay: String,
+  rehearsalDiscountPercent: Number,
+  rehearsalAmount: Number,
   summaryDetails: [
     {
       categoryId: String,

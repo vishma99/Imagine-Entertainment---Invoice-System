@@ -37,7 +37,7 @@ const Login = () => {
         alert(`Welcome back, ${data.user.name}!`);
 
         if (data.user.role === "Admin") {
-          navigate("/adminDashboard");
+          navigate("/");
         } else {
           navigate("/");
         }

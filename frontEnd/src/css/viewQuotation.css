@@ -1,0 +1,87 @@
+/* ප්‍රධාන පසුබිම */
+.dashboard-container {
+  padding: 20px;
+  background-color: #f8fafc;
+  min-height: 100vh;
+  font-family: "Inter", sans-serif;
+  margin-left: 260px;
+}
+
+.dashboard-container h2 {
+  color: #1e293b;
+  font-size: 24px;
+  margin-bottom: 20px;
+  font-weight: 700;
+}
+
+/* වගුවේ සැකසුම */
+.db-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.db-table thead th {
+  background-color: #f1f5f9;
+  color: #475569;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  padding: 15px;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.db-table tbody tr {
+  transition: background-color 0.2s;
+}
+
+.db-table tbody tr:hover {
+  background-color: #f8fafc !important;
+}
+
+.db-table td {
+  padding: 12px 15px;
+  color: #334155;
+  font-size: 13px;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+}
+
+/* බොත්තම් (Buttons) */
+.btn-edit,
+.btn-download,
+.btn-print {
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-transform: capitalize;
+}
+
+.btn-download {
+  background-color: #ecfdf5;
+  color: #059669;
+}
+
+.btn-download:hover {
+  background-color: #059669;
+  color: white;
+}
+
+.btn-edit {
+  background-color: #eff6ff;
+  color: #2563eb;
+}
+
+.btn-edit:hover:not(:disabled) {
+  background-color: #2563eb;
+  color: white;
+}

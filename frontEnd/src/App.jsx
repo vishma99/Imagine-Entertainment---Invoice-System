@@ -17,6 +17,11 @@ import Register from "./page/Register";
 import "./App.css";
 import VerifyOTP from "./page/VerifyOTP";
 import VerifyOTPForgot from "./page/VerifyOTPForgot";
+import TaxInvoice from "./page/TaxInvoice";
+import ProformaInvoices from "./page/ProformaInvoices";
+import CommercialInvoice from "./page/CommercialInvoice";
+import NormalInvoices from "./page/NormalInvoice";
+import ProformaRequestedInvoices from "./page/ProformaRequestedInvoices";
 
 /**
  * 1. ProtectedRoute Component
@@ -101,6 +106,46 @@ function MainLayout() {
             element={
               <ProtectedRoute>
                 <ViewInvoice />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/taxInvoice"
+            element={
+              <ProtectedRoute>
+                <TaxInvoice />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/proformaInvoices"
+            element={
+              <ProtectedRoute>
+                <ProformaInvoices />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/commercialInvoice"
+            element={
+              <ProtectedRoute>
+                <CommercialInvoice />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/normalInvoices"
+            element={
+              <ProtectedRoute>
+                <NormalInvoices />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/proformaRequestedInvoices"
+            element={
+              <ProtectedRoute>
+                <ProformaRequestedInvoices />
               </ProtectedRoute>
             }
           />

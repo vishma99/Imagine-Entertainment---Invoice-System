@@ -1,12 +1,15 @@
 /* පද්ධතියේ ප්‍රධාන සැකසුම */
+
 .invoice-container {
-  max-width: 850px;
-  margin: 40px auto;
-  padding: 30px;
-  background-color: #f9f9f9;
-  border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  max-width: 1200px;
+  margin: 30px auto;
+  padding: 40px;
+  background: #ffffff;
+  border-radius: 15px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  font-family: "Inter", "Segoe UI", sans-serif;
+  color: #333;
+  margin-left: 300px;
 }
 
 h2 {
@@ -212,16 +215,6 @@ textarea {
   margin-top: 10px;
 }
 /* ප්‍රධාන බහාලුම (Main Container) */
-.invoice-container {
-  max-width: 1000px;
-  margin: 30px auto;
-  padding: 40px;
-  background: #ffffff;
-  border-radius: 15px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-  font-family: "Inter", "Segoe UI", sans-serif;
-  color: #333;
-}
 
 /* ප්‍රධාන කාණ්ඩය (1. LED System) */
 .main-cat-title {
@@ -782,4 +775,17 @@ input::-webkit-calendar-picker-indicator {
   width: 100%;
   padding: 6px;
   box-sizing: border-box;
+}
+/* අලුතින් එක්වන නම highlight කිරීමට */
+.sub-title-input.highlight-input {
+  border: 2px solid #2196f3 !important;
+  background-color: #e3f2fd !important; /* ලා නිල් පැහැයක් */
+  font-weight: bold;
+  outline: none;
+}
+
+/* focus වූ විට ඇතුළත අකුරු නිල් පැහැයෙන් පෙනේ (selection color) */
+.sub-title-input::selection {
+  background: #2196f3;
+  color: white;
 }

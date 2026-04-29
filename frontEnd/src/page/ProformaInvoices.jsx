@@ -1,83 +1,43 @@
 import React, { useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import axios from "axios";
-import "../css/home.css";
-import "../css/viewQuotation.css";
+import Swal from "sweetalert2";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { useNavigate } from "react-router-dom";
-import Swal from "sweetalert2";
-import {
-  Download,
-  Printer,
-  FileEdit,
-  Trash2,
-  Plus,
-  Save,
-  XCircle,
-} from "lucide-react";
-export default function ViewQuotation() {
+import "../css/viewInvoice.css";
+
+export default function ProformaInvoices() {
+  const location = useLocation();
   const navigate = useNavigate();
-  const [quotations, setQuotations] = useState([]);
-  const [selectedQuote, setSelectedQuote] = useState(null);
-  const [showModal, setShowModal] = useState(false);
+  const [allInvoices, setAllInvoices] = useState([]);
 
   useEffect(() => {
-    fetchQuotations();
-  }, []);
+    const savedInvoices = JSON.parse(localStorage.getItem("invoices")) || [];
+    const newInvoice = location.state?.newInvoice;
 
-  const addSubCategoryInModal = (catKey) => {
-    const newSub = {
-      subTitle: "New Sub-category",
-      lineItems: [{ desc: "", qty: 1, unitPrice: 0 }],
-    };
-    const updatedQuote = { ...selectedQuote };
-    updatedQuote[catKey] = [...updatedQuote[catKey], newSub];
-    setSelectedQuote(updatedQuote);
-  };
-
-  const addLineItemInModal = (catKey, subIdx) => {
-    const newItem = { desc: "", qty: 1, unitPrice: 0 };
-    const updatedQuote = { ...selectedQuote };
-    updatedQuote[catKey][subIdx].lineItems.push(newItem);
-    setSelectedQuote(updatedQuote);
-  };
-
-  const fetchQuotations = async () => {
-    try {
-      const res = await axios.get("https://imagine-entertainment-invoice-system.onrender.com/api/quotations");
-      if (Array.isArray(res.data)) {
-        setQuotations(res.data);
-      } else if (res.data.quotations) {
-        setQuotations(res.data.quotations);
+    if (newInvoice) {
+      const exists = savedInvoices.find((inv) => inv._id === newInvoice._id);
+      if (!exists) {
+        // අලුතින් එන විට Default "Tax Invoice" ලෙස සකසයි
+        const invoiceWithStatus = {
+          ...newInvoice,
+          invoiceType: newInvoice.quotationCategory || "Tax Invoice",
+          invoiceFooterType: newInvoice.invoiceFooterType || "Proforma Invoice",
+        };
+        const updatedList = [invoiceWithStatus, ...savedInvoices];
+        setAllInvoices(updatedList);
+        localStorage.setItem("invoices", JSON.stringify(updatedList));
+      } else {
+        setAllInvoices(savedInvoices);
       }
-    } catch (err) {
-      console.error("Error fetching data:", err);
-      setQuotations([]);
+    } else {
+      setAllInvoices(savedInvoices);
     }
-  };
+  }, [location.state]);
 
-  const openEditModal = (quote) => {
-    setSelectedQuote(quote);
-    setShowModal(true);
-  };
+  // Dropdown එක වෙනස් කර Database එක Update කරන Function එක
+  // Function එක මේ ආකාරයට වෙනස් කරන්න
 
-  const handleInputChange = (e) => {
-    setSelectedQuote({ ...selectedQuote, [e.target.name]: e.target.value });
-  };
-
-  const handleUpdate = async () => {
-    try {
-      await axios.put(
-        `https://imagine-entertainment-invoice-system.onrender.com/api/quotations/${selectedQuote._id}`,
-        selectedQuote,
-      );
-      alert("✅ Updated Successfully!");
-      setShowModal(false);
-      fetchQuotations();
-    } catch (err) {
-      alert("❌ Update Failed!");
-    }
-  };
   const numberToWords = (num) => {
     const a = [
       "",
@@ -145,8 +105,6 @@ export default function ViewQuotation() {
     }
     return str;
   };
-  // -- devide two pdf
-
   const generatePDF = (q, actionType = "download") => {
     // 0 හෝ "0" දෙකම පරීක්ෂා කිරීම ආරක්ෂිතයි
     if (
@@ -167,10 +125,8 @@ export default function ViewQuotation() {
     }
   };
 
-  // --- PDF GENERATION FUNCTION ---
   const generateNormalPDF = (q, actionType) => {
     const doc = new jsPDF();
-    const headerImg = "/image/header.jpeg";
 
     const drawPageBorder = () => {
       doc.setFontSize(8);
@@ -185,13 +141,15 @@ export default function ViewQuotation() {
     const drawHeader = (isFirstPage) => {
       if (isFirstPage) {
         // Header එක මැදට ගැනීම (Page Width 210 - Image Width 150) / 2 = 30
-        doc.addImage(headerImg, "JPEG", 30, 10, 150, 25);
+
         doc.setFontSize(10);
         doc.setFont("helvetica", "bold");
         doc.setFontSize(9);
         doc.setFont("helvetica", "bold");
-        doc.rect(65, 40.5, 80, 6);
-        doc.text("QUOTATION", 105, 45, { align: "center" });
+        doc.rect(65, 10, 80, 6);
+        doc.text((q.invoiceType || "QUOTATION").toUpperCase(), 105, 14.5, {
+          align: "center",
+        });
         // doc.setFontSize(8);
         // doc.text("DUPLICATE", 195, 45, { align: "right" });
       }
@@ -200,7 +158,7 @@ export default function ViewQuotation() {
     drawPageBorder();
     drawHeader(true);
 
-    let startY = 53;
+    let startY = 22.5;
     const pAddr = (q.clientAddress || "")
       .split(",")
       .map((s) => s.trim())
@@ -1123,230 +1081,559 @@ export default function ViewQuotation() {
       1: { cellWidth: 30, halign: "right" },
       2: { cellWidth: 35, halign: "right" },
     };
+    if (
+      q.invoiceType === "Commercial Invoice" ||
+      q.invoiceType === "Normal Invoice" ||
+      q.invoiceType === "Tax Invoice" ||
+      (q.invoiceType === "Proforma Invoice" &&
+        q.proformaCategory === "Quotation Type")
+    ) {
+      if (q.quotationCategory === "Normal Quotation") {
+        autoTable(doc, {
+          startY: finalY,
+          body: [
+            [
+              "Grand Total Amount",
+              "Rs.",
+              `${q.subTotal.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+              })}`,
+            ],
+          ],
+          theme: "grid",
+          styles: {
+            fontSize: 8,
+            fontStyle: "bold",
+            lineColor: [0, 0, 0],
+            lineWidth: 0.2,
+          },
+          columnStyles: footerColStyles,
+          margin: { left: 10 },
+        });
 
-    if (q.quotationCategory === "Normal Quotation") {
-      autoTable(doc, {
-        startY: finalY,
-        body: [
-          [
-            "Grand Total Amount",
-            "Rs.",
-            `${q.subTotal.toLocaleString(undefined, {
-              minimumFractionDigits: 2,
-            })}`,
+        finalY = doc.lastAutoTable.finalY + 5;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Total Amount in Words:", 13, finalY);
+        doc.setFont("helvetica", "normal");
+        const totalInWords = numberToWords(Math.floor(q.subTotal));
+        doc.text(`${totalInWords}`, 55, finalY);
+        finalY += 12;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Mode of Payment :", 13, finalY);
+        doc.setFont("helvetica", "normal");
+        doc.text("Cash", 45, finalY);
+      } else if (q.quotationCategory === "Normal Quotation with Discount") {
+        autoTable(doc, {
+          startY: finalY,
+          body: [
+            [
+              "Sub Total Amount ",
+              "Rs.",
+              `${q.subTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
+            [
+              "Less: Special Discount ",
+              "Rs.",
+              `${(q.discount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
+            [
+              "Grand Total Amount ",
+              "Rs.",
+              `${(q.subTotal - (q.discount || 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
           ],
-        ],
-        theme: "grid",
-        styles: {
-          fontSize: 8,
-          fontStyle: "bold",
-          lineColor: [0, 0, 0],
-          lineWidth: 0.2,
-        },
-        columnStyles: footerColStyles,
-        margin: { left: 10 },
-      });
+          theme: "grid",
+          styles: {
+            fontSize: 8,
+            fontStyle: "bold",
+            lineColor: [0, 0, 0],
+            lineWidth: 0.2,
+          },
+          columnStyles: footerColStyles,
+          margin: { left: 10 },
+        });
 
-      finalY = doc.lastAutoTable.finalY + 5;
-      doc.rect(10, finalY - 5, 195, 8); // Width 195
-      doc.setFont("helvetica", "bold");
-      doc.text("Total Amount in Words:", 13, finalY);
-      doc.setFont("helvetica", "normal");
-      const totalInWords = numberToWords(Math.floor(q.subTotal));
-      doc.text(`${totalInWords}`, 55, finalY);
-      finalY += 12;
-      doc.rect(10, finalY - 5, 195, 8); // Width 195
-      doc.setFont("helvetica", "bold");
-      doc.text("Mode of Payment :", 13, finalY);
-      doc.setFont("helvetica", "normal");
-      doc.text("Cash", 45, finalY);
-    } else if (q.quotationCategory === "Normal Quotation with Discount") {
-      autoTable(doc, {
-        startY: finalY,
-        body: [
-          [
-            "Sub Total Amount ",
-            "Rs.",
-            `${q.subTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-          ],
-          [
-            "Less: Special Discount ",
-            "Rs.",
-            `${(q.discount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-          ],
-          [
-            "Grand Total Amount ",
-            "Rs.",
-            `${(q.subTotal - (q.discount || 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-          ],
-        ],
-        theme: "grid",
-        styles: {
-          fontSize: 8,
-          fontStyle: "bold",
-          lineColor: [0, 0, 0],
-          lineWidth: 0.2,
-        },
-        columnStyles: footerColStyles,
-        margin: { left: 10 },
-      });
+        finalY = doc.lastAutoTable.finalY + 5;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Total Amount in Words:", 13, finalY);
+        doc.setFont("helvetica", "normal");
+        const totalInWords = numberToWords(
+          Math.floor(q.subTotal - (q.discount || 0)),
+        );
+        doc.text(`${totalInWords}`, 55, finalY);
 
-      finalY = doc.lastAutoTable.finalY + 5;
-      doc.rect(10, finalY - 5, 195, 8); // Width 195
-      doc.setFont("helvetica", "bold");
-      doc.text("Total Amount in Words:", 13, finalY);
-      doc.setFont("helvetica", "normal");
-      const totalInWords = numberToWords(
-        Math.floor(q.subTotal - (q.discount || 0)),
-      );
-      doc.text(`${totalInWords}`, 55, finalY);
+        finalY += 12;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Mode of Payment :", 13, finalY);
+        doc.setFont("helvetica", "normal");
+        doc.text("Cash", 45, finalY);
+      } else if (q.quotationCategory === "Vat Quotation") {
+        autoTable(doc, {
+          startY: finalY,
+          body: [
+            [
+              "Total Value of Supply",
+              "Rs.",
+              `${q.subTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
+            [
+              "VAT Amount(Total Value of Supply @18%)",
+              "Rs.",
+              `${(q.vat || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
+            [
+              "Total Amount Including VAT ",
+              "Rs.",
+              `${(q.subTotal + (q.vat || 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
+          ],
+          theme: "grid",
+          styles: {
+            fontSize: 8,
+            fontStyle: "bold",
+            lineColor: [0, 0, 0],
+            lineWidth: 0.2,
+          },
+          columnStyles: footerColStyles,
+          margin: { left: 10 },
+        });
 
-      finalY += 12;
-      doc.rect(10, finalY - 5, 195, 8); // Width 195
-      doc.setFont("helvetica", "bold");
-      doc.text("Mode of Payment :", 13, finalY);
-      doc.setFont("helvetica", "normal");
-      doc.text("Cash", 45, finalY);
-    } else if (q.quotationCategory === "Vat Quotation") {
-      autoTable(doc, {
-        startY: finalY,
-        body: [
-          [
-            "Total Value of Supply",
-            "Rs.",
-            `${q.subTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-          ],
-          [
-            "VAT Amount(Total Value of Supply @18%)",
-            "Rs.",
-            `${(q.vat || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-          ],
-          [
-            "Total Amount Including VAT ",
-            "Rs.",
-            `${(q.subTotal + (q.vat || 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-          ],
-        ],
-        theme: "grid",
-        styles: {
-          fontSize: 8,
-          fontStyle: "bold",
-          lineColor: [0, 0, 0],
-          lineWidth: 0.2,
-        },
-        columnStyles: footerColStyles,
-        margin: { left: 10 },
-      });
+        finalY = doc.lastAutoTable.finalY + 5;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Total Amount in Words:", 13, finalY);
+        doc.setFont("helvetica", "normal");
+        const totalInWords = numberToWords(
+          Math.floor(q.subTotal + (q.vat || 0)),
+        );
+        doc.text(`${totalInWords}`, 55, finalY);
 
-      finalY = doc.lastAutoTable.finalY + 5;
-      doc.rect(10, finalY - 5, 195, 8); // Width 195
-      doc.setFont("helvetica", "bold");
-      doc.text("Total Amount in Words:", 13, finalY);
-      doc.setFont("helvetica", "normal");
-      const totalInWords = numberToWords(Math.floor(q.subTotal + (q.vat || 0)));
-      doc.text(`${totalInWords}`, 55, finalY);
+        finalY += 12;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Mode of Payment :", 13, finalY);
+        doc.setFont("helvetica", "normal");
+        doc.text("Cheque in favour of", 45, finalY);
+        doc.setFont("helvetica", "bolditalic");
+        doc.text('"Imagine Entertainment (Pvt) Ltd"', 71, finalY);
+      } else if (q.quotationCategory === "Vat Quotation with Discount") {
+        autoTable(doc, {
+          startY: finalY,
+          body: [
+            [
+              "Sub Total Amount",
+              "Rs.",
+              `${q.subTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
 
-      finalY += 12;
-      doc.rect(10, finalY - 5, 195, 8); // Width 195
-      doc.setFont("helvetica", "bold");
-      doc.text("Mode of Payment :", 13, finalY);
-      doc.setFont("helvetica", "normal");
-      doc.text("Cheque in favour of", 45, finalY);
-      doc.setFont("helvetica", "bolditalic");
-      doc.text('"Imagine Entertainment (Pvt) Ltd"', 71, finalY);
-    } else if (q.quotationCategory === "Vat Quotation with Discount") {
-      autoTable(doc, {
-        startY: finalY,
-        body: [
-          [
-            "Sub Total Amount",
-            "Rs.",
-            `${q.subTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            [
+              "Less: Special Discount",
+              "Rs.",
+              `${q.discount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
+            [
+              "Total Value of Supply",
+              "Rs.",
+              `${q.totalValueOfSupply.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
+            [
+              "VAT Amount(Total Value of Supply @18%)",
+              "Rs.",
+              `${(q.vat || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
+            [
+              "Total Amount Including VAT ",
+              "Rs.",
+              `${q.grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
           ],
+          theme: "grid",
+          styles: {
+            fontSize: 8,
+            fontStyle: "bold",
+            lineColor: [0, 0, 0],
+            lineWidth: 0.2,
+          },
+          columnStyles: footerColStyles,
+          margin: { left: 10 },
+        });
 
-          [
-            "Less: Special Discount",
-            "Rs.",
-            `${q.discount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-          ],
-          [
-            "Total Value of Supply",
-            "Rs.",
-            `${q.totalValueOfSupply.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-          ],
-          [
-            "VAT Amount(Total Value of Supply @18%)",
-            "Rs.",
-            `${(q.vat || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-          ],
-          [
-            "Total Amount Including VAT ",
-            "Rs.",
-            `${q.grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-          ],
-        ],
-        theme: "grid",
-        styles: {
-          fontSize: 8,
-          fontStyle: "bold",
-          lineColor: [0, 0, 0],
-          lineWidth: 0.2,
-        },
-        columnStyles: footerColStyles,
-        margin: { left: 10 },
-      });
+        finalY = doc.lastAutoTable.finalY + 5;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Total Amount in Words:", 13, finalY);
+        doc.setFont("helvetica", "normal");
+        const totalInWords = numberToWords(Math.floor(q.grandTotal));
+        doc.text(`${totalInWords}`, 55, finalY);
 
-      finalY = doc.lastAutoTable.finalY + 5;
-      doc.rect(10, finalY - 5, 195, 8); // Width 195
-      doc.setFont("helvetica", "bold");
-      doc.text("Total Amount in Words:", 13, finalY);
-      doc.setFont("helvetica", "normal");
-      const totalInWords = numberToWords(Math.floor(q.grandTotal));
-      doc.text(`${totalInWords}`, 55, finalY);
-
-      finalY += 12;
-      doc.rect(10, finalY - 5, 195, 8); // Width 195
-      doc.setFont("helvetica", "bold");
-      doc.text("Mode of Payment :", 13, finalY);
-      doc.setFont("helvetica", "normal");
-      doc.text("Cheque in favour of ", 45, finalY);
-      doc.setFont("helvetica", "bolditalic");
-      doc.text('"Imagine Entertainment (Pvt) Ltd"', 72, finalY);
-    } else if (q.quotationCategory === "Normal Quotation More Days") {
-      autoTable(doc, {
-        startY: finalY,
-        body: [
-          [
-            "Grand Total Amount",
-            "Rs.",
-            `${q.subTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+        finalY += 12;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Mode of Payment :", 13, finalY);
+        doc.setFont("helvetica", "normal");
+        doc.text("Cheque in favour of ", 45, finalY);
+        doc.setFont("helvetica", "bolditalic");
+        doc.text('"Imagine Entertainment (Pvt) Ltd"', 72, finalY);
+      } else if (q.quotationCategory === "Normal Quotation More Days") {
+        autoTable(doc, {
+          startY: finalY,
+          body: [
+            [
+              "Grand Total Amount",
+              "Rs.",
+              `${q.subTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
           ],
-        ],
-        theme: "grid",
-        styles: {
-          fontSize: 8,
-          fontStyle: "bold",
-          lineColor: [0, 0, 0],
-          lineWidth: 0.2,
-        },
-        columnStyles: footerColStyles,
-        margin: { left: 10 },
-      });
+          theme: "grid",
+          styles: {
+            fontSize: 8,
+            fontStyle: "bold",
+            lineColor: [0, 0, 0],
+            lineWidth: 0.2,
+          },
+          columnStyles: footerColStyles,
+          margin: { left: 10 },
+        });
 
-      finalY = doc.lastAutoTable.finalY + 5;
-      doc.rect(10, finalY - 5, 195, 8); // Width 195
-      doc.setFont("helvetica", "bold");
-      doc.text("Total Amount in Words:", 13, finalY);
-      doc.setFont("helvetica", "normal");
-      const totalInWords = numberToWords(Math.floor(q.grandTotal));
-      doc.text(`${totalInWords}`, 55, finalY);
+        finalY = doc.lastAutoTable.finalY + 5;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Total Amount in Words:", 13, finalY);
+        doc.setFont("helvetica", "normal");
+        const totalInWords = numberToWords(Math.floor(q.grandTotal));
+        doc.text(`${totalInWords}`, 55, finalY);
 
-      finalY += 12;
-      doc.rect(10, finalY - 5, 195, 8); // Width 195
-      doc.setFont("helvetica", "bold");
-      doc.text("Mode of Payment :", 13, finalY);
-      doc.setFont("helvetica", "normal");
-      doc.text("Cash ", 45, finalY);
+        finalY += 12;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Mode of Payment :", 13, finalY);
+        doc.setFont("helvetica", "normal");
+        doc.text("Cash ", 45, finalY);
+      }
+    } else if (
+      q.invoiceType === "Proforma Invoice" &&
+      q.proformaCategory === "Requesting Advance"
+    ) {
+      if (q.quotationCategory === "Normal Quotation") {
+        autoTable(doc, {
+          startY: finalY,
+          body: [
+            [
+              "Grand Total Amount",
+              "Rs.",
+              `${q.subTotal.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+              })}`,
+            ],
+          ],
+          theme: "grid",
+          styles: {
+            fontSize: 8,
+            fontStyle: "bold",
+            lineColor: [0, 0, 0],
+            lineWidth: 0.2,
+          },
+          columnStyles: footerColStyles,
+          margin: { left: 10 },
+        });
+
+        finalY = doc.lastAutoTable.finalY + 5;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Total Amount in Words:", 13, finalY);
+        doc.setFont("helvetica", "normal");
+        const totalInWords = numberToWords(Math.floor(q.subTotal));
+        doc.text(`${totalInWords}`, 55, finalY);
+        finalY += 12;
+        autoTable(doc, {
+          startY: finalY,
+          body: [
+            [
+              `Requesting ${q.advanceRequestedAmountPercent}% Advance Payment (Without VAT) `,
+              "Rs.",
+              `${q.advanceRequestedAmount.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+              })}`,
+            ],
+          ],
+          theme: "grid",
+          styles: {
+            fontSize: 8,
+            fontStyle: "bold",
+            lineColor: [0, 0, 0],
+            lineWidth: 0.2,
+          },
+          columnStyles: footerColStyles,
+          margin: { left: 10 },
+        });
+
+        finalY += 12;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Mode of Payment :", 13, finalY);
+        doc.setFont("helvetica", "normal");
+        doc.text("Cash", 45, finalY);
+      } else if (q.quotationCategory === "Normal Quotation with Discount") {
+        autoTable(doc, {
+          startY: finalY,
+          body: [
+            [
+              "Sub Total Amount ",
+              "Rs.",
+              `${q.subTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
+            [
+              "Less: Special Discount ",
+              "Rs.",
+              `${(q.discount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
+            [
+              "Grand Total Amount ",
+              "Rs.",
+              `${(q.subTotal - (q.discount || 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
+          ],
+          theme: "grid",
+          styles: {
+            fontSize: 8,
+            fontStyle: "bold",
+            lineColor: [0, 0, 0],
+            lineWidth: 0.2,
+          },
+          columnStyles: footerColStyles,
+          margin: { left: 10 },
+        });
+
+        finalY = doc.lastAutoTable.finalY + 5;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Total Amount in Words:", 13, finalY);
+        doc.setFont("helvetica", "normal");
+        const totalInWords = numberToWords(
+          Math.floor(q.subTotal - (q.discount || 0)),
+        );
+        doc.text(`${totalInWords}`, 55, finalY);
+        finalY += 12;
+        autoTable(doc, {
+          startY: finalY,
+          body: [
+            [
+              `Requesting ${q.advanceRequestedAmountPercent}% Advance Payment (Without VAT) `,
+              "Rs.",
+              `${q.advanceRequestedAmount.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+              })}`,
+            ],
+          ],
+          theme: "grid",
+          styles: {
+            fontSize: 8,
+            fontStyle: "bold",
+            lineColor: [0, 0, 0],
+            lineWidth: 0.2,
+          },
+          columnStyles: footerColStyles,
+          margin: { left: 10 },
+        });
+
+        finalY += 12;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Mode of Payment :", 13, finalY);
+        doc.setFont("helvetica", "normal");
+        doc.text("Cash", 45, finalY);
+      } else if (q.quotationCategory === "Vat Quotation") {
+        autoTable(doc, {
+          startY: finalY,
+          body: [
+            [
+              "Total Value of Supply",
+              "Rs.",
+              `${q.subTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
+            [
+              "VAT Amount(Total Value of Supply @18%)",
+              "Rs.",
+              `${(q.vat || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
+            [
+              "Total Amount Including VAT ",
+              "Rs.",
+              `${(q.subTotal + (q.vat || 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
+          ],
+          theme: "grid",
+          styles: {
+            fontSize: 8,
+            fontStyle: "bold",
+            lineColor: [0, 0, 0],
+            lineWidth: 0.2,
+          },
+          columnStyles: footerColStyles,
+          margin: { left: 10 },
+        });
+
+        finalY = doc.lastAutoTable.finalY + 5;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Total Amount in Words:", 13, finalY);
+        doc.setFont("helvetica", "normal");
+        const totalInWords = numberToWords(
+          Math.floor(q.subTotal + (q.vat || 0)),
+        );
+        doc.text(`${totalInWords}`, 55, finalY);
+
+        finalY += 12;
+        autoTable(doc, {
+          startY: finalY,
+          body: [
+            [
+              `Requesting ${q.advanceRequestedAmountPercent}% Advance Payment (Without VAT) `,
+              "Rs.",
+              `${q.advanceRequestedAmount.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+              })}`,
+            ],
+          ],
+          theme: "grid",
+          styles: {
+            fontSize: 8,
+            fontStyle: "bold",
+            lineColor: [0, 0, 0],
+            lineWidth: 0.2,
+          },
+          columnStyles: footerColStyles,
+          margin: { left: 10 },
+        });
+
+        finalY += 12;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Mode of Payment :", 13, finalY);
+        doc.setFont("helvetica", "normal");
+        doc.text("Cheque in favour of", 45, finalY);
+        doc.setFont("helvetica", "bolditalic");
+        doc.text('"Imagine Entertainment (Pvt) Ltd"', 71, finalY);
+      } else if (q.quotationCategory === "Vat Quotation with Discount") {
+        autoTable(doc, {
+          startY: finalY,
+          body: [
+            [
+              "Sub Total Amount",
+              "Rs.",
+              `${q.subTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
+
+            [
+              "Less: Special Discount",
+              "Rs.",
+              `${q.discount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
+            [
+              "Total Value of Supply",
+              "Rs.",
+              `${q.totalValueOfSupply.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
+            [
+              "VAT Amount(Total Value of Supply @18%)",
+              "Rs.",
+              `${(q.vat || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
+            [
+              "Total Amount Including VAT ",
+              "Rs.",
+              `${q.grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
+          ],
+          theme: "grid",
+          styles: {
+            fontSize: 8,
+            fontStyle: "bold",
+            lineColor: [0, 0, 0],
+            lineWidth: 0.2,
+          },
+          columnStyles: footerColStyles,
+          margin: { left: 10 },
+        });
+
+        finalY = doc.lastAutoTable.finalY + 5;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Total Amount in Words:", 13, finalY);
+        doc.setFont("helvetica", "normal");
+        const totalInWords = numberToWords(Math.floor(q.grandTotal));
+        doc.text(`${totalInWords}`, 55, finalY);
+
+        finalY += 12;
+        autoTable(doc, {
+          startY: finalY,
+          body: [
+            [
+              `Requesting ${q.advanceRequestedAmountPercent}% Advance Payment (Without VAT) `,
+              "Rs.",
+              `${q.advanceRequestedAmount.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+              })}`,
+            ],
+          ],
+          theme: "grid",
+          styles: {
+            fontSize: 8,
+            fontStyle: "bold",
+            lineColor: [0, 0, 0],
+            lineWidth: 0.2,
+          },
+          columnStyles: footerColStyles,
+          margin: { left: 10 },
+        });
+        finalY += 12;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Mode of Payment :", 13, finalY);
+        doc.setFont("helvetica", "normal");
+        doc.text("Cheque in favour of ", 45, finalY);
+        doc.setFont("helvetica", "bolditalic");
+        doc.text('"Imagine Entertainment (Pvt) Ltd"', 72, finalY);
+      } else if (q.quotationCategory === "Normal Quotation More Days") {
+        autoTable(doc, {
+          startY: finalY,
+          body: [
+            [
+              "Grand Total Amount",
+              "Rs.",
+              `${q.subTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
+          ],
+          theme: "grid",
+          styles: {
+            fontSize: 8,
+            fontStyle: "bold",
+            lineColor: [0, 0, 0],
+            lineWidth: 0.2,
+          },
+          columnStyles: footerColStyles,
+          margin: { left: 10 },
+        });
+
+        finalY = doc.lastAutoTable.finalY + 5;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Total Amount in Words:", 13, finalY);
+        doc.setFont("helvetica", "normal");
+        const totalInWords = numberToWords(Math.floor(q.grandTotal));
+        doc.text(`${totalInWords}`, 55, finalY);
+
+        finalY += 12;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Mode of Payment :", 13, finalY);
+        doc.setFont("helvetica", "normal");
+        doc.text("Cash ", 45, finalY);
+      }
     }
 
     // else if (q.quotationCategory === "edit") {
@@ -1392,23 +1679,7 @@ export default function ViewQuotation() {
     // }
 
     finalY += 15;
-    doc.setFont("helvetica", "bold");
-    doc.text("Terms and Conditions", 10, finalY);
-    doc.setFont("helvetica", "normal");
-    const terms = [
-      "1. Confirmation Of The Quotation Is Needed Within One Week Of The Quotation Date.",
-      "2. 75% Advance Payment On Confirmation & Balance within 7 days after the event.",
-      "3. If Any Additional Items Or Dates Requested By The Client Will Be Fully Charged With The Final Invoice.",
-      "4. 50% Of Amount From The Total Value For The Rehearsals Will Be Charged With The Final Invoice.",
-      "5. Above Given Rate Is Valid For Colombo City Limits Only.",
-      "6. Send The Purchase Order 7 Days Before The Event Date.",
-      "7. Power has to be provided by the client.",
-    ];
-    terms.forEach((term, index) => {
-      doc.text(term, 15, finalY + 7 + index * 5);
-    });
 
-    finalY = finalY + 7 + terms.length * 5 + 10;
     if (finalY > 260) {
       doc.addPage();
       drawPageBorder();
@@ -1439,9 +1710,9 @@ export default function ViewQuotation() {
       doc.save("Quatation_${q.invoiceNo}.pdf");
     }
   };
+
   const generateSummaryPDF = (q, actionType) => {
     const doc = new jsPDF();
-    const headerImg = "/image/header.jpeg";
 
     const drawPageBorder = () => {
       doc.setFontSize(8);
@@ -1456,13 +1727,15 @@ export default function ViewQuotation() {
     const drawHeader = (isFirstPage) => {
       if (isFirstPage) {
         // Header එක මැදට ගැනීම (Page Width 210 - Image Width 150) / 2 = 30
-        doc.addImage(headerImg, "JPEG", 30, 10, 150, 25);
+        // doc.addImage(headerImg, "JPEG", 30, 10, 150, 25);
         doc.setFontSize(10);
         doc.setFont("helvetica", "bold");
         doc.setFontSize(9);
         doc.setFont("helvetica", "bold");
         doc.rect(65, 40.5, 80, 6);
-        doc.text("QUOTATION", 105, 45, { align: "center" });
+        doc.text((q.invoiceType || "QUOTATION").toUpperCase(), 105, 14.5, {
+          align: "center",
+        });
         // doc.setFontSize(8);
         // doc.text("DUPLICATE", 195, 45, { align: "right" });
       }
@@ -1471,7 +1744,7 @@ export default function ViewQuotation() {
     drawPageBorder();
     drawHeader(true);
 
-    let startY = 53;
+    let startY = 22.5;
     const pAddr = (q.clientAddress || "")
       .split(",")
       .map((s) => s.trim())
@@ -2447,232 +2720,576 @@ export default function ViewQuotation() {
       1: { cellWidth: 30, halign: "right" },
       2: { cellWidth: 35, halign: "right" },
     };
+    if (
+      q.invoiceType === "Commercial Invoice" ||
+      q.invoiceType === "Normal Invoice" ||
+      q.invoiceType === "Tax Invoice" ||
+      (q.invoiceType === "Proforma Invoice" &&
+        q.proformaCategory === "Quotation Type")
+    ) {
+      if (q.quotationCategory === "Normal Quotation") {
+        autoTable(doc, {
+          startY: finalY,
+          body: [
+            [
+              "Grand Total Amount",
+              "Rs.",
+              `${q.totalValueOfSupply.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+              })}`,
+            ],
+          ],
+          theme: "grid",
+          styles: {
+            fontSize: 8,
+            fontStyle: "bold",
+            lineColor: [0, 0, 0],
+            lineWidth: 0.2,
+          },
+          columnStyles: footerColStyles,
+          margin: { left: 10 },
+        });
 
-    if (q.quotationCategory === "Normal Quotation") {
-      autoTable(doc, {
-        startY: finalY,
-        body: [
-          [
-            "Grand Total Amount",
-            "Rs.",
-            `${q.totalValueOfSupply.toLocaleString(undefined, {
-              minimumFractionDigits: 2,
-            })}`,
+        finalY = doc.lastAutoTable.finalY + 5;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Total Amount in Words:", 13, finalY);
+        doc.setFont("helvetica", "normal");
+        const totalInWords = numberToWords(Math.floor(q.subTotal));
+        doc.text(`${totalInWords}`, 55, finalY);
+        finalY += 12;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Mode of Payment :", 13, finalY);
+        doc.setFont("helvetica", "normal");
+        doc.text("Cash", 45, finalY);
+      } else if (q.quotationCategory === "Normal Quotation with Discount") {
+        autoTable(doc, {
+          startY: finalY,
+          body: [
+            [
+              "Sub Total Amount ",
+              "Rs.",
+              `${q.subTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
+            [
+              "Less: Special Discount ",
+              "Rs.",
+              `${(q.discount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
+            [
+              "Grand Total Amount ",
+              "Rs.",
+              `${(q.subTotal - (q.discount || 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
           ],
-        ],
-        theme: "grid",
-        styles: {
-          fontSize: 8,
-          fontStyle: "bold",
-          lineColor: [0, 0, 0],
-          lineWidth: 0.2,
-        },
-        columnStyles: footerColStyles,
-        margin: { left: 10 },
-      });
+          theme: "grid",
+          styles: {
+            fontSize: 8,
+            fontStyle: "bold",
+            lineColor: [0, 0, 0],
+            lineWidth: 0.2,
+          },
+          columnStyles: footerColStyles,
+          margin: { left: 10 },
+        });
 
-      finalY = doc.lastAutoTable.finalY + 5;
-      doc.rect(10, finalY - 5, 195, 8); // Width 195
-      doc.setFont("helvetica", "bold");
-      doc.text("Total Amount in Words:", 13, finalY);
-      doc.setFont("helvetica", "normal");
-      const totalInWords = numberToWords(Math.floor(q.subTotal));
-      doc.text(`${totalInWords}`, 55, finalY);
-      finalY += 12;
-      doc.rect(10, finalY - 5, 195, 8); // Width 195
-      doc.setFont("helvetica", "bold");
-      doc.text("Mode of Payment :", 13, finalY);
-      doc.setFont("helvetica", "normal");
-      doc.text("Cash", 45, finalY);
-    } else if (q.quotationCategory === "Normal Quotation with Discount") {
-      autoTable(doc, {
-        startY: finalY,
-        body: [
-          [
-            "Sub Total Amount ",
-            "Rs.",
-            `${q.subTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-          ],
-          [
-            "Less: Special Discount ",
-            "Rs.",
-            `${(q.discount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-          ],
-          [
-            "Grand Total Amount ",
-            "Rs.",
-            `${(q.subTotal - (q.discount || 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-          ],
-        ],
-        theme: "grid",
-        styles: {
-          fontSize: 8,
-          fontStyle: "bold",
-          lineColor: [0, 0, 0],
-          lineWidth: 0.2,
-        },
-        columnStyles: footerColStyles,
-        margin: { left: 10 },
-      });
+        finalY = doc.lastAutoTable.finalY + 5;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Total Amount in Words:", 13, finalY);
+        doc.setFont("helvetica", "normal");
+        const totalInWords = numberToWords(
+          Math.floor(q.subTotal - (q.discount || 0)),
+        );
+        doc.text(`${totalInWords}`, 55, finalY);
 
-      finalY = doc.lastAutoTable.finalY + 5;
-      doc.rect(10, finalY - 5, 195, 8); // Width 195
-      doc.setFont("helvetica", "bold");
-      doc.text("Total Amount in Words:", 13, finalY);
-      doc.setFont("helvetica", "normal");
-      const totalInWords = numberToWords(
-        Math.floor(q.subTotal - (q.discount || 0)),
-      );
-      doc.text(`${totalInWords}`, 55, finalY);
+        finalY += 12;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Mode of Payment :", 13, finalY);
+        doc.setFont("helvetica", "normal");
+        doc.text("Cash", 45, finalY);
+      } else if (q.quotationCategory === "Vat Quotation") {
+        autoTable(doc, {
+          startY: finalY,
+          body: [
+            [
+              "Total Value of Supply",
+              "Rs.",
+              `${q.subTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
+            [
+              "VAT Amount(Total Value of Supply @18%)",
+              "Rs.",
+              `${(q.vat || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
+            [
+              "Total Amount Including VAT ",
+              "Rs.",
+              `${(q.subTotal + (q.vat || 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
+          ],
+          theme: "grid",
+          styles: {
+            fontSize: 8,
+            fontStyle: "bold",
+            lineColor: [0, 0, 0],
+            lineWidth: 0.2,
+          },
+          columnStyles: footerColStyles,
+          margin: { left: 10 },
+        });
 
-      finalY += 12;
-      doc.rect(10, finalY - 5, 195, 8); // Width 195
-      doc.setFont("helvetica", "bold");
-      doc.text("Mode of Payment :", 13, finalY);
-      doc.setFont("helvetica", "normal");
-      doc.text("Cash", 45, finalY);
-    } else if (q.quotationCategory === "Vat Quotation") {
-      autoTable(doc, {
-        startY: finalY,
-        body: [
-          [
-            "Total Value of Supply",
-            "Rs.",
-            `${q.subTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-          ],
-          [
-            "VAT Amount(Total Value of Supply @18%)",
-            "Rs.",
-            `${(q.vat || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-          ],
-          [
-            "Total Amount Including VAT ",
-            "Rs.",
-            `${(q.subTotal + (q.vat || 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-          ],
-        ],
-        theme: "grid",
-        styles: {
-          fontSize: 8,
-          fontStyle: "bold",
-          lineColor: [0, 0, 0],
-          lineWidth: 0.2,
-        },
-        columnStyles: footerColStyles,
-        margin: { left: 10 },
-      });
+        finalY = doc.lastAutoTable.finalY + 5;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Total Amount in Words:", 13, finalY);
+        doc.setFont("helvetica", "normal");
+        const totalInWords = numberToWords(
+          Math.floor(q.subTotal + (q.vat || 0)),
+        );
+        doc.text(`${totalInWords}`, 55, finalY);
 
-      finalY = doc.lastAutoTable.finalY + 5;
-      doc.rect(10, finalY - 5, 195, 8); // Width 195
-      doc.setFont("helvetica", "bold");
-      doc.text("Total Amount in Words:", 13, finalY);
-      doc.setFont("helvetica", "normal");
-      const totalInWords = numberToWords(Math.floor(q.subTotal + (q.vat || 0)));
-      doc.text(`${totalInWords}`, 55, finalY);
+        finalY += 12;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Mode of Payment :", 13, finalY);
+        doc.setFont("helvetica", "normal");
+        doc.text("Cheque in favour of", 45, finalY);
+        doc.setFont("helvetica", "bolditalic");
+        doc.text('"Imagine Entertainment (Pvt) Ltd"', 71, finalY);
+      } else if (q.quotationCategory === "Vat Quotation with Discount") {
+        autoTable(doc, {
+          startY: finalY,
+          body: [
+            [
+              "Sub Total Amount",
+              "Rs.",
+              `${q.subTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
 
-      finalY += 12;
-      doc.rect(10, finalY - 5, 195, 8); // Width 195
-      doc.setFont("helvetica", "bold");
-      doc.text("Mode of Payment :", 13, finalY);
-      doc.setFont("helvetica", "normal");
-      doc.text("Cheque in favour of", 45, finalY);
-      doc.setFont("helvetica", "bolditalic");
-      doc.text('"Imagine Entertainment (Pvt) Ltd"', 71, finalY);
-    } else if (q.quotationCategory === "Vat Quotation with Discount") {
-      autoTable(doc, {
-        startY: finalY,
-        body: [
-          [
-            "Sub Total Amount",
-            "Rs.",
-            `${q.subTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            [
+              "Less: Special Discount",
+              "Rs.",
+              `${q.discount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
+            [
+              "Total Value of Supply",
+              "Rs.",
+              `${q.totalValueOfSupply.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
+            [
+              "VAT Amount(Total Value of Supply @18%)",
+              "Rs.",
+              `${(q.vat || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
+            [
+              "Total Amount Including VAT ",
+              "Rs.",
+              `${q.grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
           ],
+          theme: "grid",
+          styles: {
+            fontSize: 8,
+            fontStyle: "bold",
+            lineColor: [0, 0, 0],
+            lineWidth: 0.2,
+          },
+          columnStyles: footerColStyles,
+          margin: { left: 10 },
+        });
 
-          [
-            "Less: Special Discount",
-            "Rs.",
-            `${q.discount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-          ],
-          [
-            "Total Value of Supply",
-            "Rs.",
-            `${q.totalValueOfSupply.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-          ],
-          [
-            "VAT Amount(Total Value of Supply @18%)",
-            "Rs.",
-            `${(q.vat || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-          ],
-          [
-            "Total Amount Including VAT ",
-            "Rs.",
-            `${q.grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-          ],
-        ],
-        theme: "grid",
-        styles: {
-          fontSize: 8,
-          fontStyle: "bold",
-          lineColor: [0, 0, 0],
-          lineWidth: 0.2,
-        },
-        columnStyles: footerColStyles,
-        margin: { left: 10 },
-      });
+        finalY = doc.lastAutoTable.finalY + 5;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Total Amount in Words:", 13, finalY);
+        doc.setFont("helvetica", "normal");
+        const totalInWords = numberToWords(Math.floor(q.grandTotal));
+        doc.text(`${totalInWords}`, 55, finalY);
 
-      finalY = doc.lastAutoTable.finalY + 5;
-      doc.rect(10, finalY - 5, 195, 8); // Width 195
-      doc.setFont("helvetica", "bold");
-      doc.text("Total Amount in Words:", 13, finalY);
-      doc.setFont("helvetica", "normal");
-      const totalInWords = numberToWords(Math.floor(q.grandTotal));
-      doc.text(`${totalInWords}`, 55, finalY);
-
-      finalY += 12;
-      doc.rect(10, finalY - 5, 195, 8); // Width 195
-      doc.setFont("helvetica", "bold");
-      doc.text("Mode of Payment :", 13, finalY);
-      doc.setFont("helvetica", "normal");
-      doc.text("Cheque in favour of ", 45, finalY);
-      doc.setFont("helvetica", "bolditalic");
-      doc.text('"Imagine Entertainment (Pvt) Ltd"', 72, finalY);
-    } else if (q.quotationCategory === "Normal Quotation More Days") {
-      autoTable(doc, {
-        startY: finalY,
-        body: [
-          [
-            "Grand Total Amount",
-            "Rs.",
-            `${q.subTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+        finalY += 12;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Mode of Payment :", 13, finalY);
+        doc.setFont("helvetica", "normal");
+        doc.text("Cheque in favour of ", 45, finalY);
+        doc.setFont("helvetica", "bolditalic");
+        doc.text('"Imagine Entertainment (Pvt) Ltd"', 72, finalY);
+      } else if (q.quotationCategory === "Normal Quotation More Days") {
+        autoTable(doc, {
+          startY: finalY,
+          body: [
+            [
+              "Grand Total Amount",
+              "Rs.",
+              `${q.subTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
           ],
-        ],
-        theme: "grid",
-        styles: {
-          fontSize: 8,
-          fontStyle: "bold",
-          lineColor: [0, 0, 0],
-          lineWidth: 0.2,
-        },
-        columnStyles: footerColStyles,
-        margin: { left: 10 },
-      });
+          theme: "grid",
+          styles: {
+            fontSize: 8,
+            fontStyle: "bold",
+            lineColor: [0, 0, 0],
+            lineWidth: 0.2,
+          },
+          columnStyles: footerColStyles,
+          margin: { left: 10 },
+        });
 
-      finalY = doc.lastAutoTable.finalY + 5;
-      doc.rect(10, finalY - 5, 195, 8); // Width 195
-      doc.setFont("helvetica", "bold");
-      doc.text("Total Amount in Words:", 13, finalY);
-      doc.setFont("helvetica", "normal");
-      const totalInWords = numberToWords(Math.floor(q.grandTotal));
-      doc.text(`${totalInWords}`, 55, finalY);
+        finalY = doc.lastAutoTable.finalY + 5;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Total Amount in Words:", 13, finalY);
+        doc.setFont("helvetica", "normal");
+        const totalInWords = numberToWords(Math.floor(q.grandTotal));
+        doc.text(`${totalInWords}`, 55, finalY);
 
-      finalY += 12;
-      doc.rect(10, finalY - 5, 195, 8); // Width 195
-      doc.setFont("helvetica", "bold");
-      doc.text("Mode of Payment :", 13, finalY);
-      doc.setFont("helvetica", "normal");
-      doc.text("Cash ", 45, finalY);
+        finalY += 12;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Mode of Payment :", 13, finalY);
+        doc.setFont("helvetica", "normal");
+        doc.text("Cash ", 45, finalY);
+      }
+    } else if (
+      q.invoiceType === "Proforma Invoice" &&
+      q.proformaCategory === "Requesting Advance"
+    ) {
+      if (q.quotationCategory === "Normal Quotation") {
+        autoTable(doc, {
+          startY: finalY,
+          body: [
+            [
+              "Grand Total Amount",
+              "Rs.",
+              `${q.totalValueOfSupply.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+              })}`,
+            ],
+          ],
+          theme: "grid",
+          styles: {
+            fontSize: 8,
+            fontStyle: "bold",
+            lineColor: [0, 0, 0],
+            lineWidth: 0.2,
+          },
+          columnStyles: footerColStyles,
+          margin: { left: 10 },
+        });
+
+        finalY = doc.lastAutoTable.finalY + 5;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Total Amount in Words:", 13, finalY);
+        doc.setFont("helvetica", "normal");
+        const totalInWords = numberToWords(Math.floor(q.subTotal));
+        doc.text(`${totalInWords}`, 55, finalY);
+        finalY += 12;
+        autoTable(doc, {
+          startY: finalY,
+          body: [
+            [
+              `Requesting ${q.advanceRequestedAmountPercent}% Advance Payment (Without VAT) `,
+              "Rs.",
+              `${q.advanceRequestedAmount.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+              })}`,
+            ],
+          ],
+          theme: "grid",
+          styles: {
+            fontSize: 8,
+            fontStyle: "bold",
+            lineColor: [0, 0, 0],
+            lineWidth: 0.2,
+          },
+          columnStyles: footerColStyles,
+          margin: { left: 10 },
+        });
+        finalY += 12;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Mode of Payment :", 13, finalY);
+        doc.setFont("helvetica", "normal");
+        doc.text("Cash", 45, finalY);
+      } else if (q.quotationCategory === "Normal Quotation with Discount") {
+        autoTable(doc, {
+          startY: finalY,
+          body: [
+            [
+              "Sub Total Amount ",
+              "Rs.",
+              `${q.subTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
+            [
+              "Less: Special Discount ",
+              "Rs.",
+              `${(q.discount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
+            [
+              "Grand Total Amount ",
+              "Rs.",
+              `${(q.subTotal - (q.discount || 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
+          ],
+          theme: "grid",
+          styles: {
+            fontSize: 8,
+            fontStyle: "bold",
+            lineColor: [0, 0, 0],
+            lineWidth: 0.2,
+          },
+          columnStyles: footerColStyles,
+          margin: { left: 10 },
+        });
+
+        finalY = doc.lastAutoTable.finalY + 5;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Total Amount in Words:", 13, finalY);
+        doc.setFont("helvetica", "normal");
+        const totalInWords = numberToWords(
+          Math.floor(q.subTotal - (q.discount || 0)),
+        );
+        doc.text(`${totalInWords}`, 55, finalY);
+        finalY += 12;
+        autoTable(doc, {
+          startY: finalY,
+          body: [
+            [
+              `Requesting ${q.advanceRequestedAmountPercent}% Advance Payment (Without VAT) `,
+              "Rs.",
+              `${q.advanceRequestedAmount.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+              })}`,
+            ],
+          ],
+          theme: "grid",
+          styles: {
+            fontSize: 8,
+            fontStyle: "bold",
+            lineColor: [0, 0, 0],
+            lineWidth: 0.2,
+          },
+          columnStyles: footerColStyles,
+          margin: { left: 10 },
+        });
+        finalY += 12;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Mode of Payment :", 13, finalY);
+        doc.setFont("helvetica", "normal");
+        doc.text("Cash", 45, finalY);
+      } else if (q.quotationCategory === "Vat Quotation") {
+        autoTable(doc, {
+          startY: finalY,
+          body: [
+            [
+              "Total Value of Supply",
+              "Rs.",
+              `${q.subTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
+            [
+              "VAT Amount(Total Value of Supply @18%)",
+              "Rs.",
+              `${(q.vat || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
+            [
+              "Total Amount Including VAT ",
+              "Rs.",
+              `${(q.subTotal + (q.vat || 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
+          ],
+          theme: "grid",
+          styles: {
+            fontSize: 8,
+            fontStyle: "bold",
+            lineColor: [0, 0, 0],
+            lineWidth: 0.2,
+          },
+          columnStyles: footerColStyles,
+          margin: { left: 10 },
+        });
+
+        finalY = doc.lastAutoTable.finalY + 5;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Total Amount in Words:", 13, finalY);
+        doc.setFont("helvetica", "normal");
+        const totalInWords = numberToWords(
+          Math.floor(q.subTotal + (q.vat || 0)),
+        );
+        doc.text(`${totalInWords}`, 55, finalY);
+        finalY += 12;
+        autoTable(doc, {
+          startY: finalY,
+          body: [
+            [
+              `Requesting ${q.advanceRequestedAmountPercent}% Advance Payment (Without VAT) `,
+              "Rs.",
+              `${q.advanceRequestedAmount.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+              })}`,
+            ],
+          ],
+          theme: "grid",
+          styles: {
+            fontSize: 8,
+            fontStyle: "bold",
+            lineColor: [0, 0, 0],
+            lineWidth: 0.2,
+          },
+          columnStyles: footerColStyles,
+          margin: { left: 10 },
+        });
+        finalY += 12;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Mode of Payment :", 13, finalY);
+        doc.setFont("helvetica", "normal");
+        doc.text("Cheque in favour of", 45, finalY);
+        doc.setFont("helvetica", "bolditalic");
+        doc.text('"Imagine Entertainment (Pvt) Ltd"', 71, finalY);
+      } else if (q.quotationCategory === "Vat Quotation with Discount") {
+        autoTable(doc, {
+          startY: finalY,
+          body: [
+            [
+              "Sub Total Amount",
+              "Rs.",
+              `${q.subTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
+
+            [
+              "Less: Special Discount",
+              "Rs.",
+              `${q.discount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
+            [
+              "Total Value of Supply",
+              "Rs.",
+              `${q.totalValueOfSupply.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
+            [
+              "VAT Amount(Total Value of Supply @18%)",
+              "Rs.",
+              `${(q.vat || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
+            [
+              "Total Amount Including VAT ",
+              "Rs.",
+              `${q.grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
+          ],
+          theme: "grid",
+          styles: {
+            fontSize: 8,
+            fontStyle: "bold",
+            lineColor: [0, 0, 0],
+            lineWidth: 0.2,
+          },
+          columnStyles: footerColStyles,
+          margin: { left: 10 },
+        });
+
+        finalY = doc.lastAutoTable.finalY + 5;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Total Amount in Words:", 13, finalY);
+        doc.setFont("helvetica", "normal");
+        const totalInWords = numberToWords(Math.floor(q.grandTotal));
+        doc.text(`${totalInWords}`, 55, finalY);
+        finalY += 12;
+        autoTable(doc, {
+          startY: finalY,
+          body: [
+            [
+              `Requesting ${q.advanceRequestedAmountPercent}% Advance Payment (Without VAT) `,
+              "Rs.",
+              `${q.advanceRequestedAmount.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+              })}`,
+            ],
+          ],
+          theme: "grid",
+          styles: {
+            fontSize: 8,
+            fontStyle: "bold",
+            lineColor: [0, 0, 0],
+            lineWidth: 0.2,
+          },
+          columnStyles: footerColStyles,
+          margin: { left: 10 },
+        });
+        finalY += 12;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Mode of Payment :", 13, finalY);
+        doc.setFont("helvetica", "normal");
+        doc.text("Cheque in favour of ", 45, finalY);
+        doc.setFont("helvetica", "bolditalic");
+        doc.text('"Imagine Entertainment (Pvt) Ltd"', 72, finalY);
+      } else if (q.quotationCategory === "Normal Quotation More Days") {
+        autoTable(doc, {
+          startY: finalY,
+          body: [
+            [
+              "Grand Total Amount",
+              "Rs.",
+              `${q.subTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            ],
+          ],
+          theme: "grid",
+          styles: {
+            fontSize: 8,
+            fontStyle: "bold",
+            lineColor: [0, 0, 0],
+            lineWidth: 0.2,
+          },
+          columnStyles: footerColStyles,
+          margin: { left: 10 },
+        });
+
+        finalY = doc.lastAutoTable.finalY + 5;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Total Amount in Words:", 13, finalY);
+        doc.setFont("helvetica", "normal");
+        const totalInWords = numberToWords(Math.floor(q.grandTotal));
+        doc.text(`${totalInWords}`, 55, finalY);
+        finalY += 12;
+        autoTable(doc, {
+          startY: finalY,
+          body: [
+            [
+              `Requesting ${q.advanceRequestedAmountPercent}% Advance Payment (Without VAT) `,
+              "Rs.",
+              `${q.advanceRequestedAmount.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+              })}`,
+            ],
+          ],
+          theme: "grid",
+          styles: {
+            fontSize: 8,
+            fontStyle: "bold",
+            lineColor: [0, 0, 0],
+            lineWidth: 0.2,
+          },
+          columnStyles: footerColStyles,
+          margin: { left: 10 },
+        });
+        finalY += 12;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Mode of Payment :", 13, finalY);
+        doc.setFont("helvetica", "normal");
+        doc.text("Cash ", 45, finalY);
+      }
     }
-
     // else if (q.quotationCategory === "edit") {
     //   // 1. Database එකේ ඇති editExtraRows Array එක table එකට ගැලපෙන ලෙස සකස් කිරීම
     //   const editRowsBody = (q.editExtraRows || []).map((row) => [
@@ -2716,23 +3333,7 @@ export default function ViewQuotation() {
     // }
 
     finalY += 15;
-    doc.setFont("helvetica", "bold");
-    doc.text("Terms and Conditions", 10, finalY);
-    doc.setFont("helvetica", "normal");
-    const terms = [
-      "1. Confirmation Of The Quotation Is Needed Within One Week Of The Quotation Date.",
-      "2. 75% Advance Payment On Confirmation & Balance within 7 days after the event.",
-      "3. If Any Additional Items Or Dates Requested By The Client Will Be Fully Charged With The Final Invoice.",
-      "4. 50% Of Amount From The Total Value For The Rehearsals Will Be Charged With The Final Invoice.",
-      "5. Above Given Rate Is Valid For Colombo City Limits Only.",
-      "6. Send The Purchase Order 7 Days Before The Event Date.",
-      "7. Power has to be provided by the client.",
-    ];
-    terms.forEach((term, index) => {
-      doc.text(term, 15, finalY + 7 + index * 5);
-    });
 
-    finalY = finalY + 7 + terms.length * 5 + 10;
     if (finalY > 260) {
       doc.addPage();
       drawPageBorder();
@@ -2766,7 +3367,6 @@ export default function ViewQuotation() {
 
   const generateMultiDaysPDF = (q, actionType) => {
     const doc = new jsPDF();
-    const headerImg = "/image/header.jpeg";
 
     const drawPageBorder = () => {
       doc.setFontSize(8);
@@ -2775,13 +3375,15 @@ export default function ViewQuotation() {
       doc.text("IMAGINE ENTERTAINMENT (PVT) LTD", 105, 292, {
         align: "center",
       });
-      doc.text("QT NO: " + q.invoiceNo, 10, 292, { align: "left" }); // Margin එකට ගැලපුවා
+      doc.text((q.invoiceType || "QUOTATION").toUpperCase(), 105, 14.5, {
+        align: "center",
+      });
     };
 
     const drawHeader = (isFirstPage) => {
       if (isFirstPage) {
         // Header එක මැදට ගැනීම (Page Width 210 - Image Width 150) / 2 = 30
-        doc.addImage(headerImg, "JPEG", 30, 10, 150, 25);
+
         doc.setFontSize(10);
         doc.setFont("helvetica", "bold");
         doc.setFontSize(9);
@@ -3871,200 +4473,454 @@ export default function ViewQuotation() {
       1: { cellWidth: 30, halign: "right" },
       2: { cellWidth: 35, halign: "right" },
     };
+    if (
+      q.invoiceType === "Commercial Invoice" ||
+      q.invoiceType === "Normal Invoice" ||
+      q.invoiceType === "Tax Invoice" ||
+      (q.invoiceType === "Proforma Invoice" &&
+        q.proformaCategory === "Quotation Type")
+    ) {
+      if (q.quotationCategory === "Vat Quotation More Days") {
+        autoTable(doc, {
+          startY: finalY,
+          body: [
+            [
+              "Total Value of Supply",
+              "Rs.",
+              (() => {
+                // 1. LED Group එකේ දවස් ටිකේ එකතුව (Rehearsal + Event Days)
+                const eventTotal = q.eventDate.reduce(
+                  (sum, item) => sum + (Number(item.amount) || 0),
+                  0,
+                );
+                const ledGrandSum =
+                  eventTotal + (Number(q.rehearsalAmount) || 0);
 
-    if (q.quotationCategory === "Vat Quotation More Days") {
-      autoTable(doc, {
-        startY: finalY,
-        body: [
-          [
-            "Total Value of Supply",
-            "Rs.",
-            (() => {
-              // 1. LED Group එකේ දවස් ටිකේ එකතුව (Rehearsal + Event Days)
-              const eventTotal = q.eventDate.reduce(
-                (sum, item) => sum + (Number(item.amount) || 0),
-                0,
-              );
-              const ledGrandSum = eventTotal + (Number(q.rehearsalAmount) || 0);
+                // 2. අනෙක් පද්ධතිවල (Other Systems) එකතුව
+                // මේ පද්ධති දත්ත කෙලින්ම q object එකෙන් ගණනය කරමු
+                const otherSystemsTotal =
+                  q.subTotal - q.totalLEDLightingSoundStageTruss;
 
-              // 2. අනෙක් පද්ධතිවල (Other Systems) එකතුව
-              // මේ පද්ධති දත්ත කෙලින්ම q object එකෙන් ගණනය කරමු
-              const otherSystemsTotal =
-                q.subTotal - q.totalLEDLightingSoundStageTruss;
+                // 3. අවසාන එකතුව = (LED Group Sum - Overall Discount) + Other Systems
+                const finalGrandTotal =
+                  ledGrandSum - (Number(q.discount) || 0) + otherSystemsTotal;
 
-              // 3. අවසාන එකතුව = (LED Group Sum - Overall Discount) + Other Systems
-              const finalGrandTotal =
-                ledGrandSum - (Number(q.discount) || 0) + otherSystemsTotal;
-
-              return finalGrandTotal.toLocaleString(undefined, {
-                minimumFractionDigits: 2,
-              });
-            })(),
-          ],
-          [
-            "VAT Amount(Total Value of Supply @18%)",
-            "Rs.",
-            (() => {
-              // 1. LED Group එකේ දවස් ටිකේ එකතුව (Rehearsal + Event Days)
-              const eventTotal = q.eventDate.reduce(
-                (sum, item) => sum + (Number(item.amount) || 0),
-                0,
-              );
-              const ledGrandSum = eventTotal + (Number(q.rehearsalAmount) || 0);
-
-              // 2. අනෙක් පද්ධතිවල (Other Systems) එකතුව
-              // මේ පද්ධති දත්ත කෙලින්ම q object එකෙන් ගණනය කරමු
-              const otherSystemsTotal =
-                q.subTotal - q.totalLEDLightingSoundStageTruss;
-
-              // 3. අවසාන එකතුව = (LED Group Sum - Overall Discount) + Other Systems
-              const finalGrandTotal =
-                ledGrandSum - (Number(q.discount) || 0) + otherSystemsTotal;
-
-              return (finalGrandTotal * 0.18).toLocaleString(undefined, {
-                minimumFractionDigits: 2,
-              });
-            })(),
-          ],
-          [
-            "Total Amount Including VAT ",
-            "Rs.",
-            (() => {
-              // 1. LED Group එකේ දවස් ටිකේ එකතුව (Rehearsal + Event Days)
-              const eventTotal = q.eventDate.reduce(
-                (sum, item) => sum + (Number(item.amount) || 0),
-                0,
-              );
-              const ledGrandSum = eventTotal + (Number(q.rehearsalAmount) || 0);
-
-              // 2. අනෙක් පද්ධතිවල (Other Systems) එකතුව
-              // මේ පද්ධති දත්ත කෙලින්ම q object එකෙන් ගණනය කරමු
-              const otherSystemsTotal =
-                q.subTotal - q.totalLEDLightingSoundStageTruss;
-
-              // 3. අවසාන එකතුව = (LED Group Sum - Overall Discount) + Other Systems
-              const finalGrandTotal =
-                ledGrandSum - (Number(q.discount) || 0) + otherSystemsTotal;
-
-              return (finalGrandTotal * 0.18 + finalGrandTotal).toLocaleString(
-                undefined,
-                {
+                return finalGrandTotal.toLocaleString(undefined, {
                   minimumFractionDigits: 2,
-                },
-              );
-            })(),
+                });
+              })(),
+            ],
+            [
+              "VAT Amount(Total Value of Supply @18%)",
+              "Rs.",
+              (() => {
+                // 1. LED Group එකේ දවස් ටිකේ එකතුව (Rehearsal + Event Days)
+                const eventTotal = q.eventDate.reduce(
+                  (sum, item) => sum + (Number(item.amount) || 0),
+                  0,
+                );
+                const ledGrandSum =
+                  eventTotal + (Number(q.rehearsalAmount) || 0);
+
+                // 2. අනෙක් පද්ධතිවල (Other Systems) එකතුව
+                // මේ පද්ධති දත්ත කෙලින්ම q object එකෙන් ගණනය කරමු
+                const otherSystemsTotal =
+                  q.subTotal - q.totalLEDLightingSoundStageTruss;
+
+                // 3. අවසාන එකතුව = (LED Group Sum - Overall Discount) + Other Systems
+                const finalGrandTotal =
+                  ledGrandSum - (Number(q.discount) || 0) + otherSystemsTotal;
+
+                return (finalGrandTotal * 0.18).toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                });
+              })(),
+            ],
+            [
+              "Total Amount Including VAT ",
+              "Rs.",
+              (() => {
+                // 1. LED Group එකේ දවස් ටිකේ එකතුව (Rehearsal + Event Days)
+                const eventTotal = q.eventDate.reduce(
+                  (sum, item) => sum + (Number(item.amount) || 0),
+                  0,
+                );
+                const ledGrandSum =
+                  eventTotal + (Number(q.rehearsalAmount) || 0);
+
+                // 2. අනෙක් පද්ධතිවල (Other Systems) එකතුව
+                // මේ පද්ධති දත්ත කෙලින්ම q object එකෙන් ගණනය කරමු
+                const otherSystemsTotal =
+                  q.subTotal - q.totalLEDLightingSoundStageTruss;
+
+                // 3. අවසාන එකතුව = (LED Group Sum - Overall Discount) + Other Systems
+                const finalGrandTotal =
+                  ledGrandSum - (Number(q.discount) || 0) + otherSystemsTotal;
+
+                return (
+                  finalGrandTotal * 0.18 +
+                  finalGrandTotal
+                ).toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                });
+              })(),
+            ],
           ],
-        ],
-        theme: "grid",
-        styles: {
-          fontSize: 8,
-          fontStyle: "bold",
-          lineColor: [0, 0, 0],
-          lineWidth: 0.2,
-        },
-        columnStyles: footerColStyles,
-        margin: { left: 10 },
-      });
+          theme: "grid",
+          styles: {
+            fontSize: 8,
+            fontStyle: "bold",
+            lineColor: [0, 0, 0],
+            lineWidth: 0.2,
+          },
+          columnStyles: footerColStyles,
+          margin: { left: 10 },
+        });
 
-      finalY = doc.lastAutoTable.finalY + 5;
-      doc.rect(10, finalY - 5, 195, 8); // Width 195
-      doc.setFont("helvetica", "bold");
-      doc.text("Total Amount in Words:", 13, finalY);
+        finalY = doc.lastAutoTable.finalY + 5;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Total Amount in Words:", 13, finalY);
 
-      const eventTotalForWords = q.eventDate.reduce(
-        (sum, item) => sum + (Number(item.amount) || 0),
-        0,
-      );
-      const otherTotalForWords = q.subTotal - q.totalLEDLightingSoundStageTruss;
-      const finalAmtForWords =
-        eventTotalForWords +
-        (Number(q.rehearsalAmount) || 0) -
-        (Number(q.discount) || 0) +
-        otherTotalForWords;
+        const eventTotalForWords = q.eventDate.reduce(
+          (sum, item) => sum + (Number(item.amount) || 0),
+          0,
+        );
+        const otherTotalForWords =
+          q.subTotal - q.totalLEDLightingSoundStageTruss;
+        const finalAmtForWords =
+          eventTotalForWords +
+          (Number(q.rehearsalAmount) || 0) -
+          (Number(q.discount) || 0) +
+          otherTotalForWords;
 
-      const totalInWords = numberToWords(
-        Math.floor(finalAmtForWords * 0.18 + finalAmtForWords),
-      );
-      doc.text(`${totalInWords}`, 55, finalY);
+        const totalInWords = numberToWords(
+          Math.floor(finalAmtForWords * 0.18 + finalAmtForWords),
+        );
+        doc.text(`${totalInWords}`, 55, finalY);
 
-      finalY += 12;
-      doc.rect(10, finalY - 5, 195, 8); // Width 195
-      doc.setFont("helvetica", "bold");
-      doc.text("Mode of Payment :", 13, finalY);
+        finalY += 12;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Mode of Payment :", 13, finalY);
 
-      doc.setFont("helvetica", "normal");
-      doc.text("Cheque in favour of", 45, finalY);
-      doc.setFont("helvetica", "bolditalic");
-      doc.text('"Imagine Entertainment (Pvt) Ltd"', 71, finalY);
-    } else if (q.quotationCategory === "Normal Quotation More Days") {
-      autoTable(doc, {
-        startY: finalY,
-        body: [
-          [
-            "Grand Total Amount",
-            "Rs.",
-            (() => {
-              // 1. LED Group එකේ දවස් ටිකේ එකතුව (Rehearsal + Event Days)
-              const eventTotal = q.eventDate.reduce(
-                (sum, item) => sum + (Number(item.amount) || 0),
-                0,
-              );
-              const ledGrandSum = eventTotal + (Number(q.rehearsalAmount) || 0);
+        doc.setFont("helvetica", "normal");
+        doc.text("Cheque in favour of", 45, finalY);
+        doc.setFont("helvetica", "bolditalic");
+        doc.text('"Imagine Entertainment (Pvt) Ltd"', 71, finalY);
+      } else if (q.quotationCategory === "Normal Quotation More Days") {
+        autoTable(doc, {
+          startY: finalY,
+          body: [
+            [
+              "Grand Total Amount",
+              "Rs.",
+              (() => {
+                // 1. LED Group එකේ දවස් ටිකේ එකතුව (Rehearsal + Event Days)
+                const eventTotal = q.eventDate.reduce(
+                  (sum, item) => sum + (Number(item.amount) || 0),
+                  0,
+                );
+                const ledGrandSum =
+                  eventTotal + (Number(q.rehearsalAmount) || 0);
 
-              // 2. අනෙක් පද්ධතිවල (Other Systems) එකතුව
-              // මේ පද්ධති දත්ත කෙලින්ම q object එකෙන් ගණනය කරමු
-              const otherSystemsTotal =
-                q.subTotal - q.totalLEDLightingSoundStageTruss;
+                // 2. අනෙක් පද්ධතිවල (Other Systems) එකතුව
+                // මේ පද්ධති දත්ත කෙලින්ම q object එකෙන් ගණනය කරමු
+                const otherSystemsTotal =
+                  q.subTotal - q.totalLEDLightingSoundStageTruss;
 
-              // 3. අවසාන එකතුව = (LED Group Sum - Overall Discount) + Other Systems
-              const finalGrandTotal =
-                ledGrandSum - (Number(q.discount) || 0) + otherSystemsTotal;
+                // 3. අවසාන එකතුව = (LED Group Sum - Overall Discount) + Other Systems
+                const finalGrandTotal =
+                  ledGrandSum - (Number(q.discount) || 0) + otherSystemsTotal;
 
-              return finalGrandTotal.toLocaleString(undefined, {
+                return finalGrandTotal.toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                });
+              })(),
+            ],
+          ],
+          theme: "grid",
+          styles: {
+            fontSize: 8,
+            fontStyle: "bold",
+            lineColor: [0, 0, 0],
+            lineWidth: 0.2,
+          },
+          columnStyles: footerColStyles,
+          margin: { left: 10 },
+        });
+
+        finalY = doc.lastAutoTable.finalY + 5;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Total Amount in Words:", 13, finalY);
+        doc.setFont("helvetica", "normal");
+
+        const eventTotalForWords = q.eventDate.reduce(
+          (sum, item) => sum + (Number(item.amount) || 0),
+          0,
+        );
+        const otherTotalForWords =
+          q.subTotal - q.totalLEDLightingSoundStageTruss;
+        const finalAmtForWords =
+          eventTotalForWords +
+          (Number(q.rehearsalAmount) || 0) -
+          (Number(q.discount) || 0) +
+          otherTotalForWords;
+
+        const totalInWords = numberToWords(Math.floor(finalAmtForWords));
+        doc.text(`${totalInWords}`, 55, finalY);
+
+        finalY += 12;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Mode of Payment :", 13, finalY);
+        doc.setFont("helvetica", "normal");
+        doc.text("Cash ", 45, finalY);
+      }
+    } else if (
+      q.invoiceType === "Proforma Invoice" &&
+      q.proformaCategory === "Requesting Advance"
+    ) {
+      if (q.quotationCategory === "Vat Quotation More Days") {
+        autoTable(doc, {
+          startY: finalY,
+          body: [
+            [
+              "Total Value of Supply",
+              "Rs.",
+              (() => {
+                // 1. LED Group එකේ දවස් ටිකේ එකතුව (Rehearsal + Event Days)
+                const eventTotal = q.eventDate.reduce(
+                  (sum, item) => sum + (Number(item.amount) || 0),
+                  0,
+                );
+                const ledGrandSum =
+                  eventTotal + (Number(q.rehearsalAmount) || 0);
+
+                // 2. අනෙක් පද්ධතිවල (Other Systems) එකතුව
+                // මේ පද්ධති දත්ත කෙලින්ම q object එකෙන් ගණනය කරමු
+                const otherSystemsTotal =
+                  q.subTotal - q.totalLEDLightingSoundStageTruss;
+
+                // 3. අවසාන එකතුව = (LED Group Sum - Overall Discount) + Other Systems
+                const finalGrandTotal =
+                  ledGrandSum - (Number(q.discount) || 0) + otherSystemsTotal;
+
+                return finalGrandTotal.toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                });
+              })(),
+            ],
+            [
+              "VAT Amount(Total Value of Supply @18%)",
+              "Rs.",
+              (() => {
+                // 1. LED Group එකේ දවස් ටිකේ එකතුව (Rehearsal + Event Days)
+                const eventTotal = q.eventDate.reduce(
+                  (sum, item) => sum + (Number(item.amount) || 0),
+                  0,
+                );
+                const ledGrandSum =
+                  eventTotal + (Number(q.rehearsalAmount) || 0);
+
+                // 2. අනෙක් පද්ධතිවල (Other Systems) එකතුව
+                // මේ පද්ධති දත්ත කෙලින්ම q object එකෙන් ගණනය කරමු
+                const otherSystemsTotal =
+                  q.subTotal - q.totalLEDLightingSoundStageTruss;
+
+                // 3. අවසාන එකතුව = (LED Group Sum - Overall Discount) + Other Systems
+                const finalGrandTotal =
+                  ledGrandSum - (Number(q.discount) || 0) + otherSystemsTotal;
+
+                return (finalGrandTotal * 0.18).toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                });
+              })(),
+            ],
+            [
+              "Total Amount Including VAT ",
+              "Rs.",
+              (() => {
+                // 1. LED Group එකේ දවස් ටිකේ එකතුව (Rehearsal + Event Days)
+                const eventTotal = q.eventDate.reduce(
+                  (sum, item) => sum + (Number(item.amount) || 0),
+                  0,
+                );
+                const ledGrandSum =
+                  eventTotal + (Number(q.rehearsalAmount) || 0);
+
+                // 2. අනෙක් පද්ධතිවල (Other Systems) එකතුව
+                // මේ පද්ධති දත්ත කෙලින්ම q object එකෙන් ගණනය කරමු
+                const otherSystemsTotal =
+                  q.subTotal - q.totalLEDLightingSoundStageTruss;
+
+                // 3. අවසාන එකතුව = (LED Group Sum - Overall Discount) + Other Systems
+                const finalGrandTotal =
+                  ledGrandSum - (Number(q.discount) || 0) + otherSystemsTotal;
+
+                return (
+                  finalGrandTotal * 0.18 +
+                  finalGrandTotal
+                ).toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                });
+              })(),
+            ],
+          ],
+          theme: "grid",
+          styles: {
+            fontSize: 8,
+            fontStyle: "bold",
+            lineColor: [0, 0, 0],
+            lineWidth: 0.2,
+          },
+          columnStyles: footerColStyles,
+          margin: { left: 10 },
+        });
+
+        finalY = doc.lastAutoTable.finalY + 5;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Total Amount in Words:", 13, finalY);
+
+        const eventTotalForWords = q.eventDate.reduce(
+          (sum, item) => sum + (Number(item.amount) || 0),
+          0,
+        );
+        const otherTotalForWords =
+          q.subTotal - q.totalLEDLightingSoundStageTruss;
+        const finalAmtForWords =
+          eventTotalForWords +
+          (Number(q.rehearsalAmount) || 0) -
+          (Number(q.discount) || 0) +
+          otherTotalForWords;
+
+        const totalInWords = numberToWords(
+          Math.floor(finalAmtForWords * 0.18 + finalAmtForWords),
+        );
+        doc.text(`${totalInWords}`, 55, finalY);
+        autoTable(doc, {
+          startY: finalY,
+          body: [
+            [
+              `Requesting ${q.advanceRequestedAmountPercent}% Advance Payment (Without VAT) `,
+              "Rs.",
+              `${q.advanceRequestedAmount.toLocaleString(undefined, {
                 minimumFractionDigits: 2,
-              });
-            })(),
+              })}`,
+            ],
           ],
-        ],
-        theme: "grid",
-        styles: {
-          fontSize: 8,
-          fontStyle: "bold",
-          lineColor: [0, 0, 0],
-          lineWidth: 0.2,
-        },
-        columnStyles: footerColStyles,
-        margin: { left: 10 },
-      });
+          theme: "grid",
+          styles: {
+            fontSize: 8,
+            fontStyle: "bold",
+            lineColor: [0, 0, 0],
+            lineWidth: 0.2,
+          },
+          columnStyles: footerColStyles,
+          margin: { left: 10 },
+        });
+        finalY += 12;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Mode of Payment :", 13, finalY);
 
-      finalY = doc.lastAutoTable.finalY + 5;
-      doc.rect(10, finalY - 5, 195, 8); // Width 195
-      doc.setFont("helvetica", "bold");
-      doc.text("Total Amount in Words:", 13, finalY);
-      doc.setFont("helvetica", "normal");
+        doc.setFont("helvetica", "normal");
+        doc.text("Cheque in favour of", 45, finalY);
+        doc.setFont("helvetica", "bolditalic");
+        doc.text('"Imagine Entertainment (Pvt) Ltd"', 71, finalY);
+      } else if (q.quotationCategory === "Normal Quotation More Days") {
+        autoTable(doc, {
+          startY: finalY,
+          body: [
+            [
+              "Grand Total Amount",
+              "Rs.",
+              (() => {
+                // 1. LED Group එකේ දවස් ටිකේ එකතුව (Rehearsal + Event Days)
+                const eventTotal = q.eventDate.reduce(
+                  (sum, item) => sum + (Number(item.amount) || 0),
+                  0,
+                );
+                const ledGrandSum =
+                  eventTotal + (Number(q.rehearsalAmount) || 0);
 
-      const eventTotalForWords = q.eventDate.reduce(
-        (sum, item) => sum + (Number(item.amount) || 0),
-        0,
-      );
-      const otherTotalForWords = q.subTotal - q.totalLEDLightingSoundStageTruss;
-      const finalAmtForWords =
-        eventTotalForWords +
-        (Number(q.rehearsalAmount) || 0) -
-        (Number(q.discount) || 0) +
-        otherTotalForWords;
+                // 2. අනෙක් පද්ධතිවල (Other Systems) එකතුව
+                // මේ පද්ධති දත්ත කෙලින්ම q object එකෙන් ගණනය කරමු
+                const otherSystemsTotal =
+                  q.subTotal - q.totalLEDLightingSoundStageTruss;
 
-      const totalInWords = numberToWords(Math.floor(finalAmtForWords));
-      doc.text(`${totalInWords}`, 55, finalY);
+                // 3. අවසාන එකතුව = (LED Group Sum - Overall Discount) + Other Systems
+                const finalGrandTotal =
+                  ledGrandSum - (Number(q.discount) || 0) + otherSystemsTotal;
 
-      finalY += 12;
-      doc.rect(10, finalY - 5, 195, 8); // Width 195
-      doc.setFont("helvetica", "bold");
-      doc.text("Mode of Payment :", 13, finalY);
-      doc.setFont("helvetica", "normal");
-      doc.text("Cash ", 45, finalY);
+                return finalGrandTotal.toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                });
+              })(),
+            ],
+          ],
+          theme: "grid",
+          styles: {
+            fontSize: 8,
+            fontStyle: "bold",
+            lineColor: [0, 0, 0],
+            lineWidth: 0.2,
+          },
+          columnStyles: footerColStyles,
+          margin: { left: 10 },
+        });
+
+        finalY = doc.lastAutoTable.finalY + 5;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Total Amount in Words:", 13, finalY);
+        doc.setFont("helvetica", "normal");
+
+        const eventTotalForWords = q.eventDate.reduce(
+          (sum, item) => sum + (Number(item.amount) || 0),
+          0,
+        );
+        const otherTotalForWords =
+          q.subTotal - q.totalLEDLightingSoundStageTruss;
+        const finalAmtForWords =
+          eventTotalForWords +
+          (Number(q.rehearsalAmount) || 0) -
+          (Number(q.discount) || 0) +
+          otherTotalForWords;
+
+        const totalInWords = numberToWords(Math.floor(finalAmtForWords));
+        doc.text(`${totalInWords}`, 55, finalY);
+        autoTable(doc, {
+          startY: finalY,
+          body: [
+            [
+              `Requesting ${q.advanceRequestedAmountPercent}% Advance Payment (Without VAT) `,
+              "Rs.",
+              `${q.advanceRequestedAmount.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+              })}`,
+            ],
+          ],
+          theme: "grid",
+          styles: {
+            fontSize: 8,
+            fontStyle: "bold",
+            lineColor: [0, 0, 0],
+            lineWidth: 0.2,
+          },
+          columnStyles: footerColStyles,
+          margin: { left: 10 },
+        });
+        finalY += 12;
+        doc.rect(10, finalY - 5, 195, 8); // Width 195
+        doc.setFont("helvetica", "bold");
+        doc.text("Mode of Payment :", 13, finalY);
+        doc.setFont("helvetica", "normal");
+        doc.text("Cash ", 45, finalY);
+      }
     }
-
     // else if (q.quotationCategory === "edit") {
     //   // 1. Database එකේ ඇති editExtraRows Array එක table එකට ගැලපෙන ලෙස සකස් කිරීම
     //   const editRowsBody = (q.editExtraRows || []).map((row) => [
@@ -4108,23 +4964,7 @@ export default function ViewQuotation() {
     // }
 
     finalY += 15;
-    doc.setFont("helvetica", "bold");
-    doc.text("Terms and Conditions", 10, finalY);
-    doc.setFont("helvetica", "normal");
-    const terms = [
-      "1. Confirmation Of The Quotation Is Needed Within One Week Of The Quotation Date.",
-      "2. 75% Advance Payment On Confirmation & Balance within 7 days after the event.",
-      "3. If Any Additional Items Or Dates Requested By The Client Will Be Fully Charged With The Final Invoice.",
-      "4. 50% Of Amount From The Total Value For The Rehearsals Will Be Charged With The Final Invoice.",
-      "5. Above Given Rate Is Valid For Colombo City Limits Only.",
-      "6. Send The Purchase Order 7 Days Before The Event Date.",
-      "7. Power has to be provided by the client.",
-    ];
-    terms.forEach((term, index) => {
-      doc.text(term, 15, finalY + 7 + index * 5);
-    });
 
-    finalY = finalY + 7 + terms.length * 5 + 10;
     if (finalY > 260) {
       doc.addPage();
       drawPageBorder();
@@ -4155,545 +4995,164 @@ export default function ViewQuotation() {
       doc.save("Quatation_${q.invoiceNo}.pdf");
     }
   };
+
+  // 1. Database එකෙන් දත්ත ලබා ගැනීම
+  useEffect(() => {
+    const fetchInvoices = async () => {
+      try {
+        const res = await axios.get(
+          "https://imagine-entertainment-invoice-system.onrender.com/api/quotations",
+        );
+        // ඉන්වොයිස් අංකයක් (quotationNo) ඇති දත්ත පමණක් පෙරීම
+        const invoicesOnly = res.data.filter((q) => q.quotationNo);
+        setAllInvoices(invoicesOnly);
+      } catch (err) {
+        console.error("Error fetching invoices:", err);
+      }
+    };
+    fetchInvoices();
+  }, []);
+  const stats = {
+    tax: allInvoices.filter((inv) => inv.invoiceType === "Tax Invoice").length,
+    proforma: allInvoices.filter(
+      (inv) => inv.invoiceType === "Proforma Invoice",
+    ).length,
+    proformaRequested: allInvoices.filter(
+      (inv) => inv.proformaCategory === "Requesting Advance",
+    ).length,
+    proformaQuotation: allInvoices.filter(
+      (inv) => inv.proformaCategory === "Quotation Type",
+    ).length,
+
+    commercial: allInvoices.filter(
+      (inv) => inv.invoiceType === "Commercial Invoice",
+    ).length,
+    normal: allInvoices.filter((inv) => inv.invoiceType === "Normal Invoice")
+      .length,
+  };
   return (
-    <div className="dashboard-container">
-      <h2>Quotation List</h2>
-      <table className="db-table">
-        <thead>
-          <tr>
-            <th>QT NO</th>
-            <th>Creater</th>
-            <th>Client Name</th>
-            <th>Company Name</th>
-            <th>Event Name</th>
-            <th>Event Location</th>
-            <th>Categoies</th>
-            <th>Event Date</th>
-            <th>Quotation Date</th>
-            <th>Action</th>
-            <th>Download</th>
-            <th>Print</th>
-          </tr>
-        </thead>
-        <tbody>
-          {Array.isArray(quotations) && quotations.length > 0 ? (
-            quotations.map((q) => (
-              <tr
-                key={q._id}
-                onClick={() => openEditModal(q)}
-                style={{ cursor: "pointer" }}
-              >
-                <td>{q.invoiceNo}</td>
-                <td>KD</td>
-                <td>{q.ClientName}</td>
-                {/* <td>{q.clientPosition}</td> */}
-                <td>{q.companyName}</td>
-                <td>{q.eventAdditionalInfo}</td>
-                <td>{q.eventLocation}</td>
-                <td>led,light,sound</td>
-                <td>ETD {new Date(q.eventDate).toLocaleDateString()}</td>
-                <td>QT {new Date(q.date).toLocaleDateString()}</td>
+    <div className="dashboard-container" style={{ padding: "20px" }}>
+      <h2>Generated Proforma Invoices</h2>
 
-                <td>
-                  <button
-                    className="btn-edit"
-                    // පරීක්ෂා කරනවා දැනටමත් quotationNo එකක් database එකේ තියෙනවද කියලා
-                    disabled={!!q.quotationNo}
-                    onClick={async (e) => {
-                      e.stopPropagation();
-                      let baseAmount = 0;
-                      if (
-                        (q.discountButtonYes === 0 ||
-                          q.discountButtonYes === "0") &&
-                        (q.multiDays === 0 || q.multiDays === "0")
-                      ) {
-                        if (q.quotationCategory === "Normal Quotation") {
-                          baseAmount = q.subTotal;
-                        } else if (
-                          q.quotationCategory ===
-                          "Normal Quotation with Discount"
-                        ) {
-                          baseAmount = q.subTotal - q.discount;
-                        } else if (q.quotationCategory === "Vat Quotation") {
-                          baseAmount = q.subTotal;
-                        } else if (
-                          q.quotationCategory === "Vat Quotation with Discount"
-                        ) {
-                          baseAmount = q.totalValueOfSupply;
-                        }
-                      } else if (
-                        (q.discountButtonYes === 1 ||
-                          q.discountButtonYes === "1") &&
-                        (q.multiDays === 0 || q.multiDays === "0")
-                      ) {
-                        if (q.quotationCategory === "Normal Quotation") {
-                          baseAmount = q.totalValueOfSupply;
-                        } else if (
-                          q.quotationCategory ===
-                          "Normal Quotation with Discount"
-                        ) {
-                          baseAmount = q.subTotal - q.discount;
-                        } else if (q.quotationCategory === "Vat Quotation") {
-                          baseAmount = q.subTotal;
-                        } else if (
-                          q.quotationCategory === "Vat Quotation with Discount"
-                        ) {
-                          baseAmount = q.totalValueOfSupply;
-                        }
-                      } else {
-                        if (
-                          q.quotationCategory === "Normal Quotation More Days"
-                        ) {
-                          const eventTotal = (q.eventDate || []).reduce(
-                            (sum, item) => sum + (Number(item.amount) || 0),
-                            0,
-                          );
-                          const ledGrandSum =
-                            eventTotal + (Number(q.rehearsalAmount) || 0);
-                          const otherSystemsTotal =
-                            (Number(q.subTotal) || 0) -
-                            (Number(q.totalLEDLightingSoundStageTruss) || 0);
-                          baseAmount =
-                            ledGrandSum -
-                            (Number(q.discount) || 0) +
-                            otherSystemsTotal;
-                        } else if (
-                          q.quotationCategory === "Vat Quotation More Days"
-                        ) {
-                          const eventTotal = (q.eventDate || []).reduce(
-                            (sum, item) => sum + (Number(item.amount) || 0),
-                            0,
-                          );
-                          const ledGrandSum =
-                            eventTotal + (Number(q.rehearsalAmount) || 0);
-                          const otherSystemsTotal =
-                            (Number(q.subTotal) || 0) -
-                            (Number(q.totalLEDLightingSoundStageTruss) || 0);
-                          baseAmount =
-                            ledGrandSum -
-                            (Number(q.discount) || 0) +
-                            otherSystemsTotal;
-                        }
-                      }
-
-                      // else if(q.quotationCategory === "")
-                      const { value: formValues } = await Swal.fire({
-                        title: "Generate Invoice",
-                        html: `
-    <div style="text-align: left; display: flex; flex-direction: column; gap: 10px; width: 100%;">
-    <label style="font-weight: bold; font-size: 14px; margin-bottom: -5px;">Select Invoice Type:</label>
-    <select id="swal-invoice-type" style="width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #ddd; height: 45px;">
-      <option value="Tax Invoice">Tax Invoice</option>
-      <option value="Proforma Invoice">Proforma Invoice</option>
-      <option value="Commercial Invoice">Commercial Invoice</option>
-      <option value="Normal Invoice">Normal Invoice</option>
-    </select>
-
-    <div id="proforma-sub-container" style="display: none; flex-direction: column; gap: 5px; margin-top: 5px;">
-      <label style="font-weight: bold; font-size: 14px;">Select Proforma Category:</label>
-      <select id="swal-proforma-type" style="width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #ddd; height: 45px;">
-       <option value="Quotation Type">Quotation Type</option>
-        <option value="Requesting Advance">Requesting Advance</option>
-       
-        
-      </select>
-    </div>
-  <div id="advance-amount-container" style="display: none; flex-direction: column; gap: 12px; background: #f0f7ff; padding: 15px; border-radius: 8px; border: 1px solid #bee3f8;">
-        <p style="margin: 0; font-size: 12px; color: #2b6cb0;">Max Advance Limit: <b>Rs. ${baseAmount.toLocaleString()}</b></p>
-        
-        <div style="display: flex; gap: 10px;">
-          <div style="flex: 1;">
-            <label style="font-weight: bold; font-size: 13px;">Advance %</label>
-            <input id="swal-advance-percent" type="number" step="0.01" class="swal2-input" style="margin: 5px 0; width: 100%;">
-          </div>
-          <div style="flex: 2;">
-            <label style="font-weight: bold; font-size: 13px;">Requested Amount (Rs.)</label>
-            <input id="swal-advance-amount" type="number" step="0.01" class="swal2-input" style="margin: 5px 0; width: 100%;">
-          </div>
+      <div
+        className="stats-grid"
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(4, 1fr)",
+          gap: "20px",
+          marginBottom: "20px",
+        }}
+      >
+        <div className="stat-card blue">
+          <h3>Proforma Invoices</h3>
+          <p className="value">{stats.proforma.toString().padStart(2, "0")}</p>
+        </div>
+        <div
+          className="stat-card blue"
+          style={{ backgroundColor: "#f4b9bb", cursor: "pointer" }}
+          onClick={() => navigate("/proformaRequestedInvoices")}
+        >
+          <h3>Proforma Requested Invoices</h3>
+          <p className="value">
+            {stats.proformaRequested.toString().padStart(2, "0")}
+          </p>
+        </div>
+        <div className="stat-card blue">
+          <h3>Proforma Quotation Invoices</h3>
+          <p className="value">
+            {stats.proformaQuotation.toString().padStart(2, "0")}
+          </p>
         </div>
       </div>
-
-    <label style="font-weight: bold; font-size: 14px; margin-top: 5px;">Enter Invoice Number for ${q.invoiceNo}:</label>
-    <input id="swal-invoice-no" placeholder="e.g. INV-2026-001" 
-           style="width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #ddd; height: 45px; box-sizing: border-box;">
-  </div>
-    `,
-                        focusConfirm: false,
-                        showCancelButton: true,
-                        confirmButtonText: "Create & Save",
-                        didOpen: () => {
-                          const mainType =
-                            document.getElementById("swal-invoice-type");
-                          const profType =
-                            document.getElementById("swal-proforma-type");
-                          const percentInput = document.getElementById(
-                            "swal-advance-percent",
-                          );
-                          const amountInput = document.getElementById(
-                            "swal-advance-amount",
-                          );
-
-                          // වර්ගය අනුව containers පෙන්වීම
-                          const updateVisibility = () => {
-                            document.getElementById(
-                              "proforma-sub-container",
-                            ).style.display =
-                              mainType.value === "Proforma Invoice"
-                                ? "flex"
-                                : "none";
-                            document.getElementById(
-                              "advance-amount-container",
-                            ).style.display =
-                              mainType.value === "Proforma Invoice" &&
-                              profType.value === "Requesting Advance"
-                                ? "flex"
-                                : "none";
-                          };
-
-                          mainType.addEventListener("change", updateVisibility);
-                          profType.addEventListener("change", updateVisibility);
-
-                          // 🟢 ප්‍රතිශතය ගැහුවම මුදල හැදීම
-                          percentInput.addEventListener("input", () => {
-                            let p = parseFloat(percentInput.value) || 0;
-                            if (p > 100) {
-                              p = 100;
-                              percentInput.value = 100;
-                            }
-                            amountInput.value = (
-                              (baseAmount * p) /
-                              100
-                            ).toFixed(2);
-                          });
-
-                          // 🟢 මුදල ගැහුවම ප්‍රතිශතය හැදීම
-                          amountInput.addEventListener("input", () => {
-                            let a = parseFloat(amountInput.value) || 0;
-                            if (a > baseAmount) {
-                              a = baseAmount;
-                              amountInput.value = baseAmount;
-                            }
-                            percentInput.value = (
-                              (a / baseAmount) *
-                              100
-                            ).toFixed(2);
-                          });
-                        },
-                        preConfirm: () => {
-                          const no =
-                            document.getElementById("swal-invoice-no").value;
-                          if (!no)
-                            return Swal.showValidationMessage(
-                              "Invoice number is required!",
-                            );
-
-                          return {
-                            invoiceType:
-                              document.getElementById("swal-invoice-type")
-                                .value,
-                            proformaCategory:
-                              document.getElementById("swal-proforma-type")
-                                .value,
-                            typedInvoiceNo: no,
-                            advanceRequestedAmount: document.getElementById(
-                              "swal-advance-amount",
-                            ).value,
-                            advanceRequestedAmountPercent:
-                              document.getElementById("swal-advance-percent")
-                                .value,
-                          };
-                        },
-                      });
-
-                      if (formValues) {
-                        const {
-                          invoiceType,
-                          proformaCategory,
-                          typedInvoiceNo,
-                          advanceRequestedAmount,
-                          advanceRequestedAmountPercent,
-                        } = formValues;
-
-                        try {
-                          const response = await axios.put(
-                            `https://imagine-entertainment-invoice-system.onrender.com/api/quotations/${q._id}`,
-                            {
-                              ...q,
-                              quotationNo: typedInvoiceNo,
-                              invoiceType: invoiceType,
-                              proformaCategory: proformaCategory, // මෙය database එකට සේව් වේ
-                              advanceRequestedAmount: advanceRequestedAmount,
-                              advanceRequestedAmountPercent:
-                                advanceRequestedAmountPercent,
-                              // invoiceFooterType: invoiceType.includes("Tax") ? "VAT All" : "Normal",
-                              //proformaInvoiceType:
-                            },
-                          );
-
-                          if (response.status === 200) {
-                            if (typeof fetchQuotations === "function")
-                              fetchQuotations();
-
-                            Swal.fire({
-                              title: "Invoice Generated!",
-                              text: `${proformaCategory || invoiceType} ${typedInvoiceNo} has been saved successfully.`,
-                              icon: "success",
-                              timer: 2000,
-                              showConfirmButton: false,
-                            }).then(() => {
-                              const updatedInvoice = {
-                                ...q,
-                                quotationNo: typedInvoiceNo,
-                                invoiceType: invoiceType,
-                                proformaCategory: proformaCategory,
-                              };
-                              navigate("/viewInvoice", {
-                                state: { newInvoice: updatedInvoice },
-                              });
-                            });
-                          }
-                        } catch (err) {
-                          console.error("Database Update Error:", err);
-                          Swal.fire(
-                            "Error!",
-                            "Database update failed.",
-                            "error",
-                          );
-                        }
-                      }
-                    }}
-                    // බොත්තම disable වූ විට පෙනෙන ආකාරය සකස් කිරීමට
-                    style={{
-                      backgroundColor: q.quotationNo ? "#cbd5e0" : "#3182ce",
-                      color: q.quotationNo ? "#718096" : "white",
-                      cursor: q.quotationNo ? "not-allowed" : "pointer",
-                    }}
-                  >
-                    {q.quotationNo ? "Invoice Created" : "go invoice"}
-                  </button>
-                </td>
-                <td>
-                  <button
-                    className="btn-download"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      generatePDF(q, "download");
-                    }}
-                  >
-                    Download
-                  </button>
-                </td>
-                <td>
-                  <button
-                    className="btn-print"
-                    style={{
-                      backgroundColor: "#4A5568",
-                      color: "white",
-                      padding: "5px 10px",
-                      borderRadius: "4px",
-                      border: "none",
-                      cursor: "pointer",
-                    }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      generatePDF(q, "print");
-                    }}
-                  >
-                    print
-                  </button>
+      <div className="table-scroll-container">
+        <table
+          className="db-table"
+          style={{ width: "100%", marginTop: "20px" }}
+        >
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Invoice NO</th>
+              <th>Client Name</th>
+              <th>Company</th>
+              <th>Grand Total</th>
+              <th>Invoice Type</th>
+              <th>Download</th>
+              <th>Print</th>
+            </tr>
+          </thead>
+          <tbody>
+            {/* 🟢 මෙතනදී .filter() එක භාවිතා කරලා Proforma Invoice විතරක් තෝරාගන්නවා */}
+            {allInvoices.filter((inv) => inv.invoiceType === "Proforma Invoice")
+              .length > 0 ? (
+              allInvoices
+                .filter((inv) => inv.invoiceType === "Proforma Invoice") // පෙරා ගැනීම
+                .map((inv, index) => (
+                  <tr key={index}>
+                    <td>{inv.date}</td>
+                    <td>{inv.invoiceNo}</td>
+                    <td>{inv.ClientName}</td>
+                    <td>{inv.companyName}</td>
+                    <td>Rs. {inv.grandTotal?.toLocaleString()}</td>
+                    <td>{inv.proformaCategory}</td>
+                    <td>
+                      <button
+                        className="btn-download"
+                        onClick={() => generatePDF(inv, "download")}
+                      >
+                        Download
+                      </button>
+                    </td>
+                    <td>
+                      <button
+                        className="btn-print"
+                        style={{
+                          backgroundColor: "#4A5568",
+                          color: "white",
+                          padding: "5px 10px",
+                          borderRadius: "4px",
+                          border: "none",
+                          cursor: "pointer",
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          generatePDF(inv, "print");
+                        }}
+                      >
+                        print
+                      </button>
+                    </td>
+                  </tr>
+                ))
+            ) : (
+              <tr>
+                <td colSpan="8" style={{ textAlign: "center" }}>
+                  No Tax Invoices Found.
                 </td>
               </tr>
-            ))
-          ) : (
-            <tr>
-              <td colSpan="7" style={{ textAlign: "center" }}>
-                No quotations found.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-
-      {showModal && (
-        <div className="modal-overlay">
-          <div className="modal-content large-modal">
-            <h3>Update Quotation: {selectedQuote.invoiceNo}</h3>
-            <div className="modal-scroll-area">
-              <div className="modal-section">
-                <h4>General Information</h4>
-                <div className="modal-form">
-                  <div className="grid-2">
-                    <div className="form-group">
-                      <label>Quotation Date:</label>
-                      <input
-                        type="date"
-                        name="date"
-                        value={selectedQuote.date}
-                        onChange={handleInputChange}
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label>Event Date:</label>
-                      <input
-                        type="date"
-                        name="eventDate"
-                        value={selectedQuote.eventDate}
-                        onChange={handleInputChange}
-                      />
-                    </div>
-                  </div>
-                  <div className="grid-2">
-                    <input
-                      placeholder="Client Name"
-                      name="ClientName"
-                      value={selectedQuote.ClientName}
-                      onChange={handleInputChange}
-                    />
-                    <input
-                      placeholder="Client TIN"
-                      name="clientTIN"
-                      value={selectedQuote.clientTIN}
-                      onChange={handleInputChange}
-                    />
-                  </div>
-                  <div className="grid-2">
-                    <input
-                      placeholder="Designation"
-                      name="clientPosition"
-                      value={selectedQuote.clientPosition}
-                      onChange={handleInputChange}
-                    />
-                    <input
-                      placeholder="Company Name"
-                      name="companyName"
-                      value={selectedQuote.companyName}
-                      onChange={handleInputChange}
-                    />
-                  </div>
-                  <textarea
-                    placeholder="Address"
-                    name="clientAddress"
-                    value={selectedQuote.clientAddress}
-                    onChange={handleInputChange}
-                    rows="2"
-                  />
-                  <div className="grid-2">
-                    <input
-                      placeholder="Telephone"
-                      name="clientTelephoneNumber"
-                      value={selectedQuote.clientTelephoneNumber}
-                      onChange={handleInputChange}
-                    />
-                    <input
-                      placeholder="Location"
-                      name="eventLocation"
-                      value={selectedQuote.eventLocation}
-                      onChange={handleInputChange}
-                    />
-                  </div>
-                </div>
-              </div>
-              <hr />
-              <div className="systems-edit-area">
-                {[
-                  "ledSystems",
-                  "lightSystems",
-                  "soundSystems",
-                  "powerSystems",
-                  "stageAndTruss",
-                  "videoSystems",
-                  "technicianSystems",
-                  "otherSystems",
-                ].map((catKey) => (
-                  <div key={catKey} className="modal-category-box">
-                    <div className="modal-cat-header">
-                      <h4>{catKey.toUpperCase()}</h4>
-                      <button
-                        className="btn-add-sub-small"
-                        onClick={() => addSubCategoryInModal(catKey)}
-                      >
-                        + Add Sub
-                      </button>
-                    </div>
-                    {selectedQuote[catKey].map((sub, subIdx) => (
-                      <div key={subIdx} className="modal-sub-box">
-                        <input
-                          value={sub.subTitle}
-                          onChange={(e) => {
-                            const updated = [...selectedQuote[catKey]];
-                            updated[subIdx].subTitle = e.target.value;
-                            setSelectedQuote({
-                              ...selectedQuote,
-                              [catKey]: updated,
-                            });
-                          }}
-                        />
-                        {sub.lineItems.map((item, itemIdx) => (
-                          <div key={itemIdx} className="modal-item-row">
-                            <input
-                              value={item.desc}
-                              onChange={(e) => {
-                                const updated = [...selectedQuote[catKey]];
-                                updated[subIdx].lineItems[itemIdx].desc =
-                                  e.target.value;
-                                setSelectedQuote({
-                                  ...selectedQuote,
-                                  [catKey]: updated,
-                                });
-                              }}
-                            />
-                            <input
-                              type="number"
-                              value={item.qty}
-                              onChange={(e) => {
-                                const updated = [...selectedQuote[catKey]];
-                                updated[subIdx].lineItems[itemIdx].qty = Number(
-                                  e.target.value,
-                                );
-                                setSelectedQuote({
-                                  ...selectedQuote,
-                                  [catKey]: updated,
-                                });
-                              }}
-                            />
-                            <input
-                              type="number"
-                              value={item.unitPrice}
-                              onChange={(e) => {
-                                const updated = [...selectedQuote[catKey]];
-                                updated[subIdx].lineItems[itemIdx].unitPrice =
-                                  Number(e.target.value);
-                                setSelectedQuote({
-                                  ...selectedQuote,
-                                  [catKey]: updated,
-                                });
-                              }}
-                            />
-                          </div>
-                        ))}
-                        <button
-                          className="btn-add-item-small"
-                          onClick={() => addLineItemInModal(catKey, subIdx)}
-                        >
-                          + Item
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="modal-actions">
-              <button className="btn-update" onClick={handleUpdate}>
-                Save Changes
-              </button>
-              <button className="btn-close" onClick={() => setShowModal(false)}>
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+            )}
+          </tbody>
+        </table>
+      </div>
+      <div style={{ marginTop: "20px" }}>
+        <button className="btn-edit" onClick={() => navigate(-1)}>
+          Back
+        </button>
+        <button
+          className="btn-download"
+          style={{ marginLeft: "10px", backgroundColor: "#e53e3e" }}
+          onClick={() => {
+            if (
+              window.confirm("Are you sure you want to clear all invoices?")
+            ) {
+              localStorage.removeItem("invoices");
+              setAllInvoices([]);
+            }
+          }}
+        >
+          Clear All Invoices
+        </button>
+      </div>
     </div>
   );
 }
