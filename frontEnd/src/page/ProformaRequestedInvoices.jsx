@@ -141,28 +141,27 @@ export default function ProformaRequestedInvoices() {
 
     const drawHeader = (isFirstPage) => {
       if (isFirstPage) {
+        // Header එක මැදට ගැනීම (Page Width 210 - Image Width 150) / 2 = 30
+        // doc.addImage(headerImg, "JPEG", 30, 10, 150, 25);
+        doc.setFontSize(10);
         doc.setFont("helvetica", "bold");
-        doc.rect(65, 10, 80, 6);
-
-        // --- 🟢 ආරක්ෂිත තර්කය මෙන්න ---
-        const rawType = (q.invoiceType || "").trim().toLowerCase();
-        let displayTitle = "QUOTATION"; // Default අගය
-
-        if (
-          rawType.includes("tax invoice") ||
-          rawType.includes("balance payment")
-        ) {
-          displayTitle = "TAX INVOICE";
-        } else if (rawType.includes("proforma")) {
-          displayTitle = "PROFORMA INVOICE";
-        } else if (rawType.includes("commercial")) {
-          displayTitle = "COMMERCIAL INVOICE";
-        } else if (rawType !== "") {
-          displayTitle = q.invoiceType;
-        }
-
         doc.setFontSize(9);
-        doc.text(displayTitle.toUpperCase(), 105, 14.5, { align: "center" });
+        doc.setFont("helvetica", "bold");
+        doc.rect(65, 40.5, 80, 6);
+        (doc
+          .text(
+            q.invoiceType === "Requesting Balance Payment Invoice"
+              ? "TAX INVOICE"
+              : q.invoiceType || "QUOTATION",
+          )
+          .toUpperCase(),
+          105,
+          14.5,
+          {
+            align: "center",
+          });
+        // doc.setFontSize(8);
+        // doc.text("DUPLICATE", 195, 45, { align: "right" });
       }
     };
 
@@ -2232,7 +2231,7 @@ export default function ProformaRequestedInvoices() {
         doc.setFontSize(9);
         doc.setFont("helvetica", "bold");
         doc.rect(65, 40.5, 80, 6);
-        (doc
+        doc
           .text(
             q.invoiceType === "Requesting Balance Payment Invoice"
               ? "TAX INVOICE"
@@ -2243,7 +2242,7 @@ export default function ProformaRequestedInvoices() {
           14.5,
           {
             align: "center",
-          });
+          };
         // doc.setFontSize(8);
         // doc.text("DUPLICATE", 195, 45, { align: "right" });
       }
