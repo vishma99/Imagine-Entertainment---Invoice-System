@@ -141,27 +141,17 @@ export default function ProformaRequestedInvoices() {
 
     const drawHeader = (isFirstPage) => {
       if (isFirstPage) {
-        // Header එක මැදට ගැනීම (Page Width 210 - Image Width 150) / 2 = 30
-        // doc.addImage(headerImg, "JPEG", 30, 10, 150, 25);
-        doc.setFontSize(10);
-        doc.setFont("helvetica", "bold");
         doc.setFontSize(9);
         doc.setFont("helvetica", "bold");
-        doc.rect(65, 40.5, 80, 6);
-        (doc
-          .text(
-            q.invoiceType === "Requesting Balance Payment Invoice"
-              ? "TAX INVOICE"
-              : q.invoiceType || "QUOTATION",
-          )
-          .toUpperCase(),
-          105,
-          14.5,
-          {
-            align: "center",
-          });
-        // doc.setFontSize(8);
-        // doc.text("DUPLICATE", 195, 45, { align: "right" });
+        doc.rect(65, 10, 80, 6); // මම මේක 10 ට ගෙනාවා පෙනුම ලස්සන වෙන්න
+
+        const headerTitle = (
+          q.invoiceType === "Requesting Balance Payment Invoice"
+            ? "TAX INVOICE"
+            : q.invoiceType || "QUOTATION"
+        ).toUpperCase();
+
+        doc.text(headerTitle, 105, 14.5, { align: "center" });
       }
     };
 
@@ -2224,27 +2214,17 @@ export default function ProformaRequestedInvoices() {
 
     const drawHeader = (isFirstPage) => {
       if (isFirstPage) {
-        // Header එක මැදට ගැනීම (Page Width 210 - Image Width 150) / 2 = 30
-        // doc.addImage(headerImg, "JPEG", 30, 10, 150, 25);
-        doc.setFontSize(10);
-        doc.setFont("helvetica", "bold");
         doc.setFontSize(9);
         doc.setFont("helvetica", "bold");
-        doc.rect(65, 40.5, 80, 6);
-        doc
-          .text(
-            q.invoiceType === "Requesting Balance Payment Invoice"
-              ? "TAX INVOICE"
-              : q.invoiceType || "QUOTATION",
-          )
-          .toUpperCase(),
-          105,
-          14.5,
-          {
-            align: "center",
-          };
-        // doc.setFontSize(8);
-        // doc.text("DUPLICATE", 195, 45, { align: "right" });
+        doc.rect(65, 10, 80, 6); // මම මේක 10 ට ගෙනාවා පෙනුම ලස්සන වෙන්න
+
+        const headerTitle = (
+          q.invoiceType === "Requesting Balance Payment Invoice"
+            ? "TAX INVOICE"
+            : q.invoiceType || "QUOTATION"
+        ).toUpperCase();
+
+        doc.text(headerTitle, 105, 14.5, { align: "center" });
       }
     };
 
@@ -4434,27 +4414,17 @@ export default function ProformaRequestedInvoices() {
 
     const drawHeader = (isFirstPage) => {
       if (isFirstPage) {
-        // Header එක මැදට ගැනීම (Page Width 210 - Image Width 150) / 2 = 30
-
-        doc.setFontSize(10);
-        doc.setFont("helvetica", "bold");
         doc.setFontSize(9);
         doc.setFont("helvetica", "bold");
-        doc.rect(65, 40.5, 80, 6);
-        (doc
-          .text(
-            q.invoiceType === "Requesting Balance Payment Invoice"
-              ? "TAX INVOICE"
-              : q.invoiceType || "QUOTATION",
-          )
-          .toUpperCase(),
-          105,
-          14.5,
-          {
-            align: "center",
-          });
-        // doc.setFontSize(8);
-        // doc.text("DUPLICATE", 195, 45, { align: "right" });
+        doc.rect(65, 10, 80, 6); // මම මේක 10 ට ගෙනාවා පෙනුම ලස්සන වෙන්න
+
+        const headerTitle = (
+          q.invoiceType === "Requesting Balance Payment Invoice"
+            ? "TAX INVOICE"
+            : q.invoiceType || "QUOTATION"
+        ).toUpperCase();
+
+        doc.text(headerTitle, 105, 14.5, { align: "center" });
       }
     };
 
@@ -6396,7 +6366,9 @@ export default function ProformaRequestedInvoices() {
   useEffect(() => {
     const fetchInvoices = async () => {
       try {
-        const res = await axios.get("https://imagine-entertainment-invoice-system.onrender.com/api/quotations");
+        const res = await axios.get(
+          "https://imagine-entertainment-invoice-system.onrender.com/api/quotations",
+        );
         // ඉන්වොයිස් අංකයක් (quotationNo) ඇති දත්ත පමණක් පෙරීම
         const invoicesOnly = res.data.filter((q) => q.quotationNo);
         setAllInvoices(invoicesOnly);
